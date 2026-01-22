@@ -1,0 +1,95 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cardio.AI - Neural ECG Diagnostics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <!-- html2pdf dependency for high-fidelity PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+      :root {
+        --cyber-cyan: #06b6d4;
+        --cyber-magenta: #d946ef;
+        --cyber-red: #ef4444;
+        --cyber-bg: #020617;
+      }
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: var(--cyber-bg);
+        color: #f1f5f9;
+        overflow-x: hidden;
+      }
+      .font-mono {
+        font-family: 'JetBrains Mono', monospace;
+      }
+      .glass-card {
+        background: rgba(15, 23, 42, 0.7);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
+      }
+      .cyber-border {
+        position: relative;
+        overflow: hidden;
+      }
+      .cyber-border::after {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0; height: 1px;
+        background: linear-gradient(90deg, transparent, var(--cyber-cyan), transparent);
+        animation: scan-line 3s infinite;
+      }
+      @keyframes scan-line {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
+      }
+      .neon-text-glow {
+        text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+      }
+      .floating-logo {
+        filter: drop-shadow(0 0 30px rgba(217, 70, 239, 0.3));
+        animation: float 6s ease-in-out infinite;
+      }
+      @keyframes float {
+        0%, 100% { transform: translateY(0) rotate(0); }
+        50% { transform: translateY(-15px) rotate(1deg); }
+      }
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar { width: 6px; }
+      ::-webkit-scrollbar-track { background: var(--cyber-bg); }
+      ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
+      ::-webkit-scrollbar-thumb:hover { background: var(--cyber-cyan); }
+
+      /* PDF Print Specific Styles */
+      @media print {
+        .no-print { display: none !important; }
+        body { background: white; color: black; }
+        .glass-card { background: white; border: 1px solid #eee; box-shadow: none; backdrop-filter: none; }
+      }
+    </style>
+    <script>
+      if (typeof process === 'undefined') {
+        window.process = { env: {} };
+      }
+    </script>
+    <script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
+    "react-dom/client": "https://aistudiocdn.com/react-dom@18.2.0/client",
+    "react-dom": "https://aistudiocdn.com/react-dom@18.2.0",
+    "react": "https://aistudiocdn.com/react@18.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@18.2.0/",
+    "react/": "https://aistudiocdn.com/react@18.2.0/",
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
