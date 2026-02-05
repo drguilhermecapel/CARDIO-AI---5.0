@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
 import Header from './components/Header';
 import Disclaimer from './components/Disclaimer';
@@ -92,8 +91,14 @@ function App() {
       <VoiceAssistant />
 
       <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
-        <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-cyan-500/5 to-transparent"></div>
+        {/* Cyber Grid Background */}
+        <div className="absolute inset-0 opacity-[0.06]" style={{ 
+          backgroundImage: 'linear-gradient(rgba(6,182,212,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(6,182,212,0.15) 1px, transparent 1px)', 
+          backgroundSize: '40px 40px',
+          maskImage: 'radial-gradient(circle at center, black 40%, transparent 90%)'
+        }}></div>
+        
+        <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-cyan-900/10 to-transparent"></div>
         <div className="absolute top-[-10%] right-[-10%] w-[800px] h-[800px] bg-cyan-500/5 rounded-full blur-[160px]"></div>
         <div className="absolute bottom-[-10%] left-[-10%] w-[800px] h-[800px] bg-magenta-500/5 rounded-full blur-[160px]"></div>
       </div>
@@ -123,12 +128,12 @@ function App() {
               </div>
 
               <h2 className="text-8xl md:text-9xl font-black text-white tracking-tighter mb-8 uppercase italic leading-[0.85]">
-                NEURAL<br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-magenta-400 neon-text-glow">CARDIAC</span><br/>LINK
+                CARDIO<br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-magenta-400 neon-text-glow">AI</span><br/>SYSTEM
               </h2>
               
               <div className="max-w-2xl mx-auto mb-16 p-4 border-y border-white/5 bg-white/5 backdrop-blur-sm">
                 <p className="text-xs text-slate-400 font-mono tracking-[0.3em] uppercase opacity-70">
-                  Precision Bio-Signal Analysis // Real-Time Diagnostic Synthesis // OMI-Aware Engine v6.1
+                  Precision Bio-Signal Analysis // Real-Time Diagnostic Synthesis // OMI-Aware Engine v7.0
                 </p>
               </div>
               
