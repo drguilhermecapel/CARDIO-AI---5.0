@@ -1,0 +1,73 @@
+{
+  "resourceType": "DiagnosticReport",
+  "id": "example-ecg-report",
+  "status": "final",
+  "category": [
+    {
+      "coding": [
+        {
+          "system": "http://loinc.org",
+          "code": "11524-6",
+          "display": "EKG study"
+        }
+      ]
+    }
+  ],
+  "code": {
+    "coding": [
+      {
+        "system": "http://loinc.org",
+        "code": "11524-6",
+        "display": "EKG study"
+      }
+    ]
+  },
+  "subject": {
+    "reference": "Patient/example"
+  },
+  "effectiveDateTime": "2023-10-25T14:30:00Z",
+  "issued": "2023-10-25T14:35:00Z",
+  "performer": [
+    {
+      "reference": "Organization/CardioAI-Nexus",
+      "display": "CardioAI Nexus Diagnostic Engine v1.0"
+    }
+  ],
+  "resultsInterpreter": [
+    {
+      "reference": "Practitioner/example",
+      "display": "Dr. Reviewer (if applicable)"
+    }
+  ],
+  "conclusion": "Sinus Rhythm with ST Elevation in leads V1-V4 consistent with Anteroseptal STEMI.",
+  "conclusionCode": [
+    {
+      "coding": [
+        {
+          "system": "http://snomed.info/sct",
+          "code": "54016002",
+          "display": "Anteroseptal myocardial infarction"
+        }
+      ]
+    }
+  ],
+  "presentedForm": [
+    {
+      "contentType": "application/pdf",
+      "language": "en",
+      "title": "Full ECG Report",
+      "url": "https://api.cardioai.com/reports/12345.pdf",
+      "hash": "sha256_hash_of_pdf_content"
+    }
+  ],
+  "extension": [
+    {
+      "url": "http://cardioai.com/fhir/StructureDefinition/confidence-score",
+      "valueDecimal": 0.98
+    },
+    {
+      "url": "http://cardioai.com/fhir/StructureDefinition/urgency",
+      "valueCode": "Emergency"
+    }
+  ]
+}

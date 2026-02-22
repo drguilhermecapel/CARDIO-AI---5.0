@@ -121,6 +121,20 @@ export interface DigitizationMetrics {
   representativeBeats: DigitizedBeat[]; // Extracted vector data for key leads
 }
 
+export interface HospitalGradeReport {
+  diagnóstico_principal: string;
+  confiança_principal: number;
+  diagnósticos_diferenciais: Array<{
+    condition: string;
+    probability: number;
+    severity: string;
+  }>;
+  regiões_críticas: { [lead: string]: number[] }; // Heatmap coordinates
+  qualidade_sinal: number;
+  alertas: string[];
+  tempo_processamento: number;
+}
+
 export interface EcgAnalysisResult {
   id?: string;
   timestamp?: number;
@@ -138,6 +152,9 @@ export interface EcgAnalysisResult {
   confidenceLevel: 'Low' | 'Medium' | 'High';
   guidelineReferences: string[];
   regulatoryWarnings: string[];
+  
+  // New Hospital Grade Field
+  hospitalGradeReport?: HospitalGradeReport;
 }
 
 export interface EcgRecord extends EcgAnalysisResult {

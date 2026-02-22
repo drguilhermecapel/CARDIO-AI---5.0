@@ -174,9 +174,39 @@ const ANALYSIS_SCHEMA = {
     clinicalReasoning: { type: Type.STRING },
     clinicalImplications: { type: Type.ARRAY, items: { type: Type.STRING } },
     guidelineReferences: { type: Type.ARRAY, items: { type: Type.STRING } },
-    regulatoryWarnings: { type: Type.ARRAY, items: { type: Type.STRING } }
+    regulatoryWarnings: { type: Type.ARRAY, items: { type: Type.STRING } },
+    hospitalGradeReport: {
+        type: Type.OBJECT,
+        properties: {
+            diagnóstico_principal: { type: Type.STRING },
+            confiança_principal: { type: Type.NUMBER },
+            diagnósticos_diferenciais: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        condition: { type: Type.STRING },
+                        probability: { type: Type.NUMBER },
+                        severity: { type: Type.STRING }
+                    }
+                }
+            },
+            regiões_críticas: {
+                type: Type.OBJECT,
+                description: "Map of Lead Name to array of critical x-coordinates (0-1000 scale)",
+                properties: {
+                    V1: { type: Type.ARRAY, items: { type: Type.NUMBER } },
+                    II: { type: Type.ARRAY, items: { type: Type.NUMBER } },
+                    V5: { type: Type.ARRAY, items: { type: Type.NUMBER } }
+                }
+            },
+            qualidade_sinal: { type: Type.NUMBER },
+            alertas: { type: Type.ARRAY, items: { type: Type.STRING } },
+            tempo_processamento: { type: Type.NUMBER }
+        }
+    }
   },
-  required: ["technicalQuality", "diagnosis", "urgency", "heartRate", "rhythm", "clinicalReasoning", "precisionMeasurements"]
+  required: ["technicalQuality", "diagnosis", "urgency", "heartRate", "rhythm", "clinicalReasoning", "precisionMeasurements", "hospitalGradeReport"]
 };
 
 export const analyzeEcgImage = async (base64Data: string, mimeType: string, patientCtx?: PatientContext): Promise<EcgAnalysisResult> => {
@@ -394,9 +424,13 @@ export const analyzeEcgImage = async (base64Data: string, mimeType: string, pati
             1. Scrutinize the image using the "Computer Vision" module for precise measurements.
             2. Run the findings against the 8-Phase Protocol above.
             3. **CRITICAL:** Populate 'precisionMeasurements.ischemiaAnalysis' with exact findings from Phase 4 (ST trends, affected wall, culprit artery).
-            4. In 'neuralTelemetry', detail the differential probability (e.g., "70% OMI vs 30% Pericarditis").
-            5. In 'clinicalReasoning', cite specific criteria (e.g., "Met modified Sgarbossa criteria with ST/S ratio < -0.25").
-            6. Determine Urgency strictly: OMI/STEMI/Vtach/Block = Emergency.
+            4. **HOSPITAL GRADE REPORT:** Simulate the output of a multi-model Deep Learning ensemble (ViT + Specialized Heads). 
+               - Provide a confidence score (0-1) for the main diagnosis.
+               - List differential diagnoses with probabilities.
+               - Identify "Critical Regions" (x-coordinates 0-1000) where the pathology is most visible in V1, II, and V5.
+            5. In 'neuralTelemetry', detail the differential probability (e.g., "70% OMI vs 30% Pericarditis").
+            6. In 'clinicalReasoning', cite specific criteria (e.g., "Met modified Sgarbossa criteria with ST/S ratio < -0.25").
+            7. Determine Urgency strictly: OMI/STEMI/Vtach/Block = Emergency.
             
             Return strictly valid JSON.
             `
