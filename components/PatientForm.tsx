@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { PatientContext } from '../types';
 
@@ -35,96 +36,94 @@ const PatientForm: React.FC<PatientFormProps> = ({ onConfirm }) => {
     setIsSaved(true);
   };
 
-  const commonSymptoms = ["Chest Pain", "Palpitations", "Syncope", "Shortness of Breath", "Dizziness"];
+  const clinicalFlags = [
+    { id: "Chest Pain", label: "DOR TORÁCICA (ANGINA)" },
+    { id: "Syncope", label: "SÍNCOPE / DESMAIO" },
+    { id: "Palpitations", label: "PALPITAÇÕES" },
+    { id: "Dyspnea", label: "DISPNEIA (FALTA AR)" },
+    { id: "Dizziness", label: "TONTURA / PRÉ-SÍNCOPE" },
+    { id: "Fatigue", label: "FADIGA EXTREMA" },
+    { id: "Edema", label: "EDEMA (INCHAÇO)" },
+    { id: "Family Hx", label: "HIST. FAM. MORTE SÚBITA" },
+    { id: "Prev MI", label: "IAM PRÉVIO / STENT" },
+    { id: "Pacemaker", label: "PORTADOR DE CDI/MP" }
+  ];
 
   return (
-    <div className="w-full max-w-3xl mx-auto glass-card rounded-2xl border-white/5 p-8 mb-12 animate-fade-in-up">
-      <div className="flex items-center gap-3 mb-8">
-        <div className="bg-cyan-500/10 text-cyan-400 p-2.5 rounded-xl border border-cyan-500/20 shadow-inner">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-          </svg>
-        </div>
-        <div>
-          <h3 className="text-sm font-black text-white uppercase tracking-[0.2em]">Subject Profiling</h3>
-          <p className="text-[10px] text-slate-500 font-mono uppercase">Neural context input required</p>
-        </div>
+    <div className="w-full animate-fade-in-up">
+      <div className="flex items-center gap-2 mb-6 opacity-70">
+        <div className="h-2 w-2 bg-cyan-500 rounded-full animate-pulse"></div>
+        <h3 className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em]">Clinical Context Parameters</h3>
       </div>
       
-      <form onSubmit={handleSubmit} className="space-y-8">
-        <div className="grid grid-cols-2 gap-6">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-2 gap-4">
           <div className="group">
-            <label className="block text-[10px] font-mono font-bold text-slate-500 uppercase mb-2 tracking-widest group-focus-within:text-cyan-400 transition-colors">Age Parameters</label>
             <input 
               type="number" 
               value={age}
               onChange={(e) => handleInputChange(setAge, e.target.value)}
-              placeholder="INT_VAL"
-              className="w-full bg-slate-950 border border-white/10 rounded-xl py-3 px-4 text-white font-mono placeholder:text-slate-800 focus:outline-none focus:border-cyan-500 transition-all shadow-inner"
+              placeholder="AGE (YRS)"
+              className="w-full bg-slate-900/50 border border-white/5 rounded-lg py-2 px-3 text-white text-xs font-mono placeholder:text-slate-600 focus:outline-none focus:border-cyan-500/50 focus:bg-slate-900 transition-all"
             />
           </div>
           <div className="group">
-            <label className="block text-[10px] font-mono font-bold text-slate-500 uppercase mb-2 tracking-widest group-focus-within:text-cyan-400 transition-colors">Biological Gender</label>
             <select 
               value={gender}
               onChange={(e) => handleInputChange(setGender, e.target.value as any)}
-              className="w-full bg-slate-950 border border-white/10 rounded-xl py-3 px-4 text-white font-mono focus:outline-none focus:border-cyan-500 transition-all shadow-inner"
+              className="w-full bg-slate-900/50 border border-white/5 rounded-lg py-2 px-3 text-white text-xs font-mono focus:outline-none focus:border-cyan-500/50 focus:bg-slate-900 transition-all appearance-none"
             >
-              <option value="Male">MALE_REF</option>
-              <option value="Female">FEMALE_REF</option>
-              <option value="Other">X_NEUTRAL</option>
+              <option value="Male">MALE_XY</option>
+              <option value="Female">FEMALE_XX</option>
+              <option value="Other">OTHER</option>
             </select>
           </div>
         </div>
 
         <div>
-          <label className="block text-[10px] font-mono font-bold text-slate-500 uppercase mb-3 tracking-widest">Active Symptom Array</label>
-          <div className="flex flex-wrap gap-2">
-            {commonSymptoms.map(sym => (
+          <label className="block text-[8px] font-mono font-bold text-slate-500 uppercase mb-3 tracking-widest flex justify-between">
+            <span>Active Flags / Symptoms</span>
+            <span className="text-cyan-500/50">{symptoms.length} SELECTED</span>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {clinicalFlags.map(flag => (
               <button
-                key={sym}
+                key={flag.id}
                 type="button"
-                onClick={() => toggleSymptom(sym)}
-                className={`px-4 py-2 rounded-lg text-[10px] font-black tracking-widest uppercase transition-all border ${
-                  symptoms.includes(sym) 
-                    ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.3)]' 
-                    : 'bg-slate-950 text-slate-500 border-white/10 hover:border-cyan-500/50 hover:text-slate-300'
+                onClick={() => toggleSymptom(flag.id)}
+                className={`px-3 py-2 rounded text-[8px] font-bold tracking-widest uppercase transition-all border text-left flex items-center justify-between ${
+                  symptoms.includes(flag.id) 
+                    ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/40 shadow-[0_0_10px_rgba(6,182,212,0.1)]' 
+                    : 'bg-white/5 text-slate-500 border-white/5 hover:border-white/20 hover:text-slate-300'
                 }`}
               >
-                {sym}
+                <span>{flag.label}</span>
+                {symptoms.includes(flag.id) && <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full shadow-[0_0_5px_rgba(6,182,212,0.8)]"></div>}
               </button>
             ))}
           </div>
         </div>
 
         <div>
-          <label className="block text-[10px] font-mono font-bold text-slate-500 uppercase mb-3 tracking-widest">Historical Medical Logs</label>
           <textarea
             value={history}
             onChange={(e) => handleInputChange(setHistory, e.target.value)}
-            placeholder="Input hypertension, MI, diabetes data points..."
-            rows={3}
-            className="w-full bg-slate-950 border border-white/10 rounded-xl py-4 px-4 text-white font-mono placeholder:text-slate-800 focus:outline-none focus:border-cyan-500 transition-all shadow-inner resize-none text-xs"
+            placeholder="Additional Clinical History (Meds, comorbidities)..."
+            rows={2}
+            className="w-full bg-slate-900/50 border border-white/5 rounded-lg py-2 px-3 text-white font-mono placeholder:text-slate-700 focus:outline-none focus:border-cyan-500/50 focus:bg-slate-900 transition-all resize-none text-[10px]"
           />
         </div>
 
-        <div className="flex items-center justify-between pt-4 gap-6">
-           <div className="flex-1 p-3 rounded-lg border border-white/5 bg-white/5">
-             <p className="text-[9px] text-slate-500 italic uppercase leading-relaxed font-mono">
-               SYS_NOTE: Contextual data significantly increases the precision of neural ischemia differentiation vs benign repolarization.
-             </p>
-           </div>
-           <button 
-             type="submit" 
-             className={`px-8 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-[0.3em] transition-all duration-500 ${
-               isSaved 
-                 ? 'bg-green-500/20 text-green-400 border border-green-500/50 shadow-[0_0_20px_rgba(34,197,94,0.2)]' 
-                 : 'bg-white text-slate-950 hover:bg-cyan-400 hover:scale-105 active:scale-95'
-             }`}
-           >
-             {isSaved ? 'LOG_STORED' : 'COMMIT_DATA'}
-           </button>
-        </div>
+        <button 
+          type="submit" 
+          className={`w-full py-3 rounded-lg text-[9px] font-black uppercase tracking-[0.3em] transition-all duration-300 border ${
+            isSaved 
+              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+              : 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 hover:text-white hover:border-cyan-500/30'
+          }`}
+        >
+          {isSaved ? 'CONTEXT_LOCKED' : 'SYNC CONTEXT'}
+        </button>
       </form>
     </div>
   );

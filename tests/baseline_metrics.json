@@ -1,0 +1,11 @@
+{
+    "MI": {
+        "sensitivity": 0.90,
+        "specificity": 0.85
+    },
+    "AFIB": {
+        "sensitivity": 0.95,
+        "specificity": 0.90
+    },
+    "global_f1": 0.85
+}

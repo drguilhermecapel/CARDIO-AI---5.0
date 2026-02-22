@@ -1,5 +1,5 @@
 {
-  "name": "Cardio AI",
+  "name": "Cardio AI Pro",
   "description": "Comprehensive Clinical-Grade ECG Diagnostic Platform covering 147+ arrhythmia types with advanced clinical decision support.",
   "requestFramePermissions": [
     "microphone"

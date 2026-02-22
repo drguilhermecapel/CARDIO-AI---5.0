@@ -26,6 +26,13 @@ const EcgGlossary: React.FC = () => {
       subtitle: 'Morfologia Plus-Minus',
       description: 'Padrão bifásico em V1. Quando a fase negativa é profunda, indica sobrecarga atrial esquerda.',
       color: 'cyan'
+    },
+    {
+      id: 'epsilon',
+      title: 'Onda Épsilon',
+      subtitle: 'Sinal de ARVC/DAVD',
+      description: 'Pequena deflexão positiva ao final do QRS. Patognomônico de Displasia Arritmogênica do Ventrículo Direito.',
+      color: 'emerald'
     }
   ];
 
@@ -60,35 +67,35 @@ const EcgGlossary: React.FC = () => {
         <h2 className="text-4xl font-black text-white italic tracking-tighter uppercase">Atlas de Anatomia Elétrica</h2>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {concepts.map((item) => (
-          <div key={item.id} className="glass-card p-8 rounded-[2.5rem] border border-white/5 relative group overflow-hidden transition-all hover:border-white/20">
-            <div className={`absolute top-0 right-0 w-32 h-32 bg-${item.color}-500/5 blur-3xl rounded-full -mr-16 -mt-16`}></div>
+          <div key={item.id} className="glass-card p-6 rounded-[2.5rem] border border-white/5 relative group overflow-hidden transition-all hover:border-white/20 hover:bg-white/5">
+            <div className={`absolute top-0 right-0 w-24 h-24 bg-${item.color}-500/5 blur-3xl rounded-full -mr-12 -mt-12`}></div>
             
-            <div className="relative z-10">
-              <div className={`w-12 h-12 mb-6 rounded-2xl bg-${item.color}-500/10 border border-${item.color}-500/20 flex items-center justify-center`}>
-                 <svg className={`w-6 h-6 text-${item.color}-400`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <div className="relative z-10 flex flex-col h-full">
+              <div className={`w-10 h-10 mb-4 rounded-xl bg-${item.color}-500/10 border border-${item.color}-500/20 flex items-center justify-center`}>
+                 <svg className={`w-5 h-5 text-${item.color}-400`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                    <path d="M22 12h-4l-3 9L9 3l-3 9H2" strokeLinecap="round" strokeLinejoin="round" />
                  </svg>
               </div>
 
-              <h4 className="text-white text-2xl font-black uppercase italic mb-1">{item.title}</h4>
-              <p className={`text-[9px] font-bold text-${item.color}-500 uppercase tracking-widest mb-4`}>{item.subtitle}</p>
+              <h4 className="text-white text-lg font-black uppercase italic mb-1 leading-tight">{item.title}</h4>
+              <p className={`text-[8px] font-bold text-${item.color}-500 uppercase tracking-widest mb-4`}>{item.subtitle}</p>
               
-              <p className="text-slate-400 text-[11px] leading-relaxed mb-8 h-12">
+              <p className="text-slate-400 text-[10px] leading-relaxed mb-6 flex-grow">
                 {item.description}
               </p>
 
               <button 
                 onClick={() => handlePlayAudio(item.title)}
                 disabled={!!playing}
-                className={`w-full py-4 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-3 ${
+                className={`w-full py-3 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
                   playing === item.title 
                     ? 'bg-white text-slate-950 scale-95' 
                     : 'bg-white/5 text-white hover:bg-white hover:text-slate-950'
                 }`}
               >
-                {playing === item.title ? "Explaining..." : "Listen to Briefing"}
+                {playing === item.title ? "Explaining..." : "Listen Briefing"}
               </button>
             </div>
           </div>

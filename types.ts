@@ -2,23 +2,61 @@
 export interface PatientContext {
   age: string;
   gender: 'Male' | 'Female' | 'Other';
+  ethnicity?: 'Caucasian' | 'Asian' | 'African' | 'Hispanic' | 'Other';
   symptoms: string[]; 
   history?: string; 
 }
 
-export interface BaranchukAnalysis {
-  pWaveDurationMs: number;
-  iabType: 'None' | 'Partial' | 'Advanced (Bayes Syndrome)';
-  pWaveMorphologyInferior: 'Normal' | 'Notched' | 'Biphasic (+/-)';
-  afibRiskScore: 'Low' | 'Moderate' | 'High';
+export interface SignalQualityMetrics {
+  snrDb: number; // Signal-to-Noise Ratio estimate
+  baselineWander: 'None' | 'Mild' | 'Severe';
+  powerLineInterference: boolean; // 50/60Hz noise
+  artifactsDetected: string[];
+  reliabilityScore: number; // 0-100
 }
 
-export interface ArvdAnalysis {
-  epsilonWaveDetected: boolean;
-  tWaveInversionV1V3: boolean;
-  terminalActivationDelayMs: number;
-  localizedQrsWidening: boolean;
-  rvPrecordialEctopy: boolean;
+export interface NeuralTelemetry {
+  modelArchitecture: string; // e.g., "Hybrid EfficientNet-B7 + Temporal Transformer"
+  processingTimeMs: number;
+  attentionFocus: string[]; // Leads where the model focused most (simulated attention map)
+  differentialDiagnoses: Array<{
+    diagnosis: string;
+    probability: number; // 0-100
+    reasoning: string;
+  }>;
+  featureExtraction: {
+    morphologicalFeatures: string[]; // Detected by CNN
+    rhythmFeatures: string[]; // Detected by Transformer
+  };
+}
+
+export interface WaveformFeatures {
+  pWave: {
+    present: boolean;
+    morphology: 'Sinus' | 'Biphasic' | 'Peaked' | 'Notched' | 'Absent' | 'Flutter' | 'Fibrillatory';
+    durationMs: number;
+    amplitudeMv: number;
+    axisDegrees?: number;
+  };
+  qrsComplex: {
+    durationMs: number;
+    amplitudeMv: number; // Max amplitude
+    axisDegrees: number;
+    morphologyV1: 'rS' | 'QS' | 'RSr' | 'Rs' | 'R' | 'Other';
+    morphologyV6: 'qR' | 'Rs' | 'R' | 'Monophasic R' | 'Other';
+    transitionZone: 'V1' | 'V2' | 'V3' | 'V4' | 'V5' | 'V6' | 'Clockwise' | 'Counter-Clockwise';
+  };
+  tWave: {
+    morphology: 'Normal' | 'Peaked' | 'Inverted' | 'Biphasic' | 'Flat';
+    axisDegrees?: number;
+    symmetry: 'Symmetric' | 'Asymmetric';
+  };
+  intervals: {
+    prMs: number;
+    qtMs: number;
+    qtcMs: number; // Fridericia
+    rrRegularity: 'Regular' | 'Irregular' | 'Regularly Irregular';
+  };
 }
 
 export interface IschemiaAnalysis {
@@ -27,54 +65,67 @@ export interface IschemiaAnalysis {
   wellensSyndrome: 'None' | 'Type A (Biphasic)' | 'Type B (Deep Inversion)';
   deWinterPattern: boolean;
   stSegmentTrend: 'Elevation' | 'Depression' | 'Neutral';
-  affectedWall?: 'Anterior' | 'Inferior' | 'Lateral' | 'Septal' | 'Posterior' | 'Global';
+  stShape?: 'Concave' | 'Convex' | 'Horizontal' | 'Downsloping';
+  affectedWall?: 'Anterior' | 'Inferior' | 'Lateral' | 'Septal' | 'Posterior' | 'Global' | 'Right Ventricle';
+  reciprocalChangesFound: boolean;
+  culpritArtery?: 'LAD' | 'RCA' | 'LCx' | 'Left Main' | 'Unknown';
 }
 
-export interface PacemakerAnalysis {
-  pacingMode: 'AAI' | 'VVI' | 'DDD' | 'VDD' | 'CRT-P/D' | 'None';
-  pacingSite: 'Atrial' | 'Ventricular (RV)' | 'Ventricular (LV)' | 'Biventricular' | 'Dual Chamber' | 'None';
-  captureIntegrity: 'Stable' | 'Failure to Capture' | 'Failure to Sense' | 'Oversensing' | 'Inconclusive';
-  spikeAmplitude: 'Micro' | 'Prominent' | 'Bipolar (Low)';
-  atrioventricularIntervalMs?: number;
+export interface StructuralAnalysis {
+  lvhDetected: boolean;
+  lvhCriteria?: string;
+  rvhDetected: boolean;
+  atrialEnlargement: 'None' | 'Left (LAE)' | 'Right (RAE)' | 'Bi-atrial';
 }
 
-export interface SndAnalysis {
-  condition: 'Sinus Bradycardia' | 'Sinus Pause' | 'Sinoatrial Block' | 'Chronotropic Incompetence' | 'Tachy-Brady Syndrome' | 'Isorhythmic Dissociation' | 'None';
-  pauseDurationMs?: number;
-  bsaType?: 'Type I' | 'Type II';
-  chronotropicIndex?: number;
-  dissociationDetails?: string;
-  pacemakerIndication: 'Class I' | 'Class IIa' | 'Class IIb' | 'Class III' | 'Unknown';
+export interface ConductionAnalysis {
+  blocks: string[];
+  fascicularBlock: 'None' | 'LAFB' | 'LPFB' | 'Bifascicular' | 'Trifascicular';
+  wpwPattern: boolean;
+  ivcdType?: 'LBBB' | 'RBBB' | 'IVCD' | 'None';
 }
 
+// Unified Precision Measurements
 export interface PrecisionMeasurements {
-  pWave: { 
-    amplitudeMv: number; 
-    durationMs: number;
-    morphology?: 'Normal' | 'Biphasic (+/-)' | 'Notched' | 'Inverted' | 'Retrograde';
-  };
-  prIntervalMs: number;
-  qrsComplex: { 
-    amplitudeMv: number; 
-    durationMs: number;
-  };
-  qtIntervalMs: number;
-  qtcIntervalMs: number;
-  stDeviationMv: number;
-  pacemakerAnalysis?: PacemakerAnalysis;
-  sndAnalysis?: SndAnalysis;
-  arvdAnalysis?: ArvdAnalysis;
-  baranchukAnalysis?: BaranchukAnalysis;
+  signalQuality: SignalQualityMetrics;
+  neuralTelemetry: NeuralTelemetry; // New field for AI architecture outputs
+  waves: WaveformFeatures;
+  
+  // Specific Analyses
   ischemiaAnalysis?: IschemiaAnalysis;
+  structuralAnalysis?: StructuralAnalysis;
+  conductionAnalysis?: ConductionAnalysis;
+  brugadaAnalysis?: any;
+  pacemakerAnalysis?: any;
+  
+  // ECG Digitiser Integration
+  digitizationMetrics?: DigitizationMetrics;
+
+  // Backward compatibility helpers
+  axis?: { qrsAxis: number; pAxis: number; tAxis: number; interpretation: string };
+  pWave?: any; 
+  qrsComplex?: any; 
+  qtAnalysis?: any; 
+}
+
+export interface DigitizedBeat {
+  lead: string;
+  timeMs: number[]; // Relative time in ms (0 to ~1000ms)
+  amplitudeMv: number[]; // Amplitude in mV
+}
+
+export interface DigitizationMetrics {
+  method: string; // e.g., "Hough Transform + Deep Learning (Simulated)"
+  gridDetection: 'Successful' | 'Failed' | 'Partial';
+  segmentationConfidence: number; // 0-100
+  representativeBeats: DigitizedBeat[]; // Extracted vector data for key leads
 }
 
 export interface EcgAnalysisResult {
   id?: string;
   timestamp?: number;
-  technicalQuality: {
+  technicalQuality: { 
     overallScore: number;
-    calibrationFound: boolean;
-    isInterpretabilityLimited: boolean;
     leadPlacementValidation: string;
   };
   heartRate: string;
@@ -85,6 +136,8 @@ export interface EcgAnalysisResult {
   clinicalImplications: string[];
   precisionMeasurements: PrecisionMeasurements;
   confidenceLevel: 'Low' | 'Medium' | 'High';
+  guidelineReferences: string[];
+  regulatoryWarnings: string[];
 }
 
 export interface EcgRecord extends EcgAnalysisResult {

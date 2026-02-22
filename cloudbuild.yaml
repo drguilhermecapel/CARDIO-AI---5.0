@@ -1,0 +1,38 @@
+steps:
+  # 1. Install Dependencies
+  - name: 'python:3.9'
+    entrypoint: 'pip'
+    args: ['install', '-r', 'requirements.txt', 'pytest', 'httpx', 'scipy', 'matplotlib']
+
+  # 2. Run Unit Tests
+  - name: 'python:3.9'
+    entrypoint: 'pytest'
+    args: ['tests/unit']
+    env:
+      - 'PYTHONPATH=.'
+
+  # 3. Run Integration Tests
+  - name: 'python:3.9'
+    entrypoint: 'pytest'
+    args: ['tests/integration']
+    env:
+      - 'PYTHONPATH=.'
+      - 'THRESH_MI=0.6'
+      - 'THRESH_AFIB=0.8'
+
+  # 4. Run Regression Tests (Optional - requires model artifact)
+  # We skip this if model is not present in the build environment
+  # In a real pipeline, we might pull the model from GCS first.
+  
+  # 5. Build Container
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/cardio-endpoint', '-f', 'serving/Dockerfile', '.']
+
+  # 6. Push Container
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/cardio-endpoint']
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 1200s

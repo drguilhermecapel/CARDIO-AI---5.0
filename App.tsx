@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
 import Header from './components/Header';
 import Disclaimer from './components/Disclaimer';
@@ -6,7 +7,7 @@ import AnalysisView from './components/AnalysisView';
 import HistoryView from './components/HistoryView';
 import VoiceAssistant from './components/VoiceAssistant'; 
 import PatientForm from './components/PatientForm';
-import EcgGlossary from './components/EcgGlossary';
+import PaymentModal from './components/PaymentModal';
 import { EcgAnalysisResult, AnalysisStatus, EcgRecord, PatientContext } from './types';
 import { analyzeEcgImage, AnalysisError } from './services/geminiService';
 import { getHistory } from './services/database';
@@ -25,13 +26,32 @@ function App() {
   const [patientContext, setPatientContext] = useState<PatientContext | undefined>(undefined);
   const [showHistory, setShowHistory] = useState(false);
   const [historyRecords, setHistoryRecords] = useState<EcgRecord[]>([]);
+  
+  // Monetization State
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [analysisCount, setAnalysisCount] = useState(0);
+  const [isPremium, setIsPremium] = useState(false);
+
+  const PIX_KEY = "guilherme.capel@yahoo.com";
 
   useEffect(() => {
     setHistoryRecords(getHistory());
+    
+    // Load usage stats
+    const savedCount = parseInt(localStorage.getItem('cardio_usage_count') || '0');
+    const premiumStatus = localStorage.getItem('cardio_premium_status') === 'true';
+    setAnalysisCount(savedCount);
+    setIsPremium(premiumStatus);
   }, [status]); 
 
   const handlePatientContextConfirm = (ctx: PatientContext) => {
       setPatientContext(ctx);
+  };
+
+  const handlePaymentSuccess = () => {
+    setIsPremium(true);
+    localStorage.setItem('cardio_premium_status', 'true');
+    setShowPaywall(false);
   };
 
   const handleValidationError = (msg: string) => {
@@ -45,6 +65,12 @@ function App() {
   };
 
   const handleFileSelect = useCallback(async (file: File) => {
+    // Monetization Check
+    if (analysisCount >= 1 && !isPremium) {
+      setShowPaywall(true);
+      return;
+    }
+
     setStatus(AnalysisStatus.ANALYZING);
     setError(null);
     setResult(null);
@@ -58,8 +84,26 @@ function App() {
 
       try {
         const analysisResult = await analyzeEcgImage(base64Data, mimeType, patientContext);
+        
+        // Increment usage count on success
+        const newCount = analysisCount + 1;
+        setAnalysisCount(newCount);
+        localStorage.setItem('cardio_usage_count', newCount.toString());
+        
         setResult(analysisResult);
         setStatus(AnalysisStatus.SUCCESS);
+
+        // Archive to GCP (Cloud Storage + BigQuery)
+        fetch('/api/archive', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: base64String,
+            analysisResult,
+            patientContext
+          })
+        }).catch(err => console.error('Archiving failed:', err));
+
       } catch (err: any) {
         if (err instanceof AnalysisError) {
             setError({ code: err.code, message: err.message, suggestion: err.suggestion });
@@ -74,7 +118,7 @@ function App() {
       }
     };
     reader.readAsDataURL(file);
-  }, [patientContext]);
+  }, [patientContext, analysisCount, isPremium]);
 
   const handleReset = useCallback(() => {
     setStatus(AnalysisStatus.IDLE);
@@ -86,21 +130,27 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col font-sans text-slate-100 relative selection:bg-cyan-500/30 overflow-x-hidden bg-[#020617]">
-      <Header />
+      <Header isPremium={isPremium} />
       <Disclaimer />
       <VoiceAssistant />
+      
+      {showPaywall && (
+        <PaymentModal 
+          pixKey={PIX_KEY}
+          onConfirmPayment={handlePaymentSuccess}
+        />
+      )}
 
       <div className="fixed inset-0 pointer-events-none z-0">
-        {/* Cyber Grid Background */}
-        <div className="absolute inset-0 opacity-[0.06]" style={{ 
+        {/* Cyber Grid Background - Cleaned up opacity */}
+        <div className="absolute inset-0 opacity-[0.03]" style={{ 
           backgroundImage: 'linear-gradient(rgba(6,182,212,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(6,182,212,0.15) 1px, transparent 1px)', 
-          backgroundSize: '40px 40px',
-          maskImage: 'radial-gradient(circle at center, black 40%, transparent 90%)'
+          backgroundSize: '50px 50px',
+          maskImage: 'radial-gradient(circle at center, black 30%, transparent 80%)'
         }}></div>
         
-        <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-cyan-900/10 to-transparent"></div>
-        <div className="absolute top-[-10%] right-[-10%] w-[800px] h-[800px] bg-cyan-500/5 rounded-full blur-[160px]"></div>
-        <div className="absolute bottom-[-10%] left-[-10%] w-[800px] h-[800px] bg-magenta-500/5 rounded-full blur-[160px]"></div>
+        {/* Subtle Ambient Glow */}
+        <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-cyan-900/5 to-transparent"></div>
       </div>
 
       {showHistory && (
@@ -111,51 +161,55 @@ function App() {
         />
       )}
 
-      <main className="flex-grow container mx-auto px-4 py-16 relative z-10">
+      <main className="flex-grow container mx-auto px-4 py-12 relative z-10">
         {status === AnalysisStatus.IDLE && (
-          <div className="flex flex-col items-center justify-center animate-fade-in">
-            <div className="text-center mb-16 max-w-5xl relative">
-              <div className="relative mb-16 flex justify-center">
-                <div className="relative w-48 h-48">
-                  <div className="absolute inset-0 border-[3px] border-cyan-500/20 rounded-full animate-spin-slow"></div>
-                  <div className="absolute inset-4 border border-dashed border-magenta-500/30 rounded-full animate-spin-reverse"></div>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <svg className="w-20 h-20 text-cyan-400 drop-shadow-[0_0_15px_rgba(6,182,212,0.8)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path d="M22 12h-4l-3 9L9 3l-3 9H2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              <h2 className="text-8xl md:text-9xl font-black text-white tracking-tighter mb-8 uppercase italic leading-[0.85]">
-                CARDIO<br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-magenta-400 neon-text-glow">AI</span><br/>SYSTEM
+          <div className="flex flex-col items-center justify-center animate-fade-in max-w-6xl mx-auto">
+            
+            {/* Clean Hero Section */}
+            <div className="text-center mb-16 relative w-full">
+              <h2 className="text-7xl md:text-9xl font-black text-white tracking-tighter mb-4 uppercase italic leading-[0.85] opacity-90 hover:opacity-100 transition-opacity cursor-default">
+                CARDIO<span className="text-cyan-500">AI</span>
               </h2>
               
-              <div className="max-w-2xl mx-auto mb-16 p-4 border-y border-white/5 bg-white/5 backdrop-blur-sm">
-                <p className="text-xs text-slate-400 font-mono tracking-[0.3em] uppercase opacity-70">
-                  Precision Bio-Signal Analysis // Real-Time Diagnostic Synthesis // OMI-Aware Engine v7.0
-                </p>
-              </div>
-              
-              <div className="flex justify-center gap-6">
-                 <button 
+              <div className="flex flex-col items-center gap-4">
+                <div className="h-px w-24 bg-gradient-to-r from-transparent via-cyan-500 to-transparent"></div>
+                <div className="flex items-center gap-2">
+                   <p className="text-[10px] text-cyan-400/80 font-mono tracking-[0.3em] uppercase">
+                     {isPremium ? 'Premium Core Active' : 'Trial Version v7.0'}
+                   </p>
+                   {!isPremium && analysisCount === 0 && (
+                      <span className="bg-green-500/20 text-green-400 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border border-green-500/30">
+                        1 Free Credit
+                      </span>
+                   )}
+                </div>
+                
+                <button 
                    onClick={() => setShowHistory(true)}
-                   className="group relative px-10 py-5 bg-transparent border border-white/10 rounded-xl overflow-hidden transition-all hover:border-cyan-500/50"
+                   className="mt-4 px-6 py-2 border border-white/10 rounded-full hover:bg-white/5 hover:border-cyan-500/30 transition-all group flex items-center gap-2"
                  >
-                   <div className="absolute inset-0 bg-white/5 translate-y-full group-hover:translate-y-0 transition-transform"></div>
-                   <div className="relative z-10 flex items-center gap-3">
-                     <div className="w-1.5 h-1.5 rounded-full bg-cyan-400 group-hover:animate-ping"></div>
-                     <span className="text-[10px] font-black text-white uppercase tracking-[0.3em]">Access Clinical Vault</span>
-                   </div>
+                   <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 group-hover:animate-ping"></span>
+                   <span className="text-[9px] font-black text-slate-400 group-hover:text-white uppercase tracking-[0.2em]">Open Clinical Vault</span>
                  </button>
               </div>
             </div>
             
-            <div className="w-full flex flex-col items-center gap-12">
-              <PatientForm onConfirm={handlePatientContextConfirm} />
-              <FileUpload onFileSelect={handleFileSelect} isLoading={false} onValidationError={handleValidationError} />
-              <EcgGlossary />
+            {/* Integrated Workflow */}
+            <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              {/* Context Module */}
+              <div className="lg:col-span-4 order-2 lg:order-1">
+                 <div className="relative">
+                   <div className="absolute -left-4 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-white/10 to-transparent lg:block hidden"></div>
+                   <PatientForm onConfirm={handlePatientContextConfirm} />
+                 </div>
+              </div>
+
+              {/* Upload Module (Center Stage) */}
+              <div className="lg:col-span-8 order-1 lg:order-2">
+                <FileUpload onFileSelect={handleFileSelect} isLoading={false} onValidationError={handleValidationError} />
+              </div>
             </div>
+
           </div>
         )}
 
@@ -187,7 +241,7 @@ function App() {
         )}
 
         {status === AnalysisStatus.SUCCESS && result && (
-          <AnalysisView result={result} imagePreview={imagePreview || ''} onReset={handleReset} />
+          <AnalysisView result={result} imagePreview={imagePreview || ''} onReset={handleReset} patientContext={patientContext} />
         )}
 
         {status === AnalysisStatus.ERROR && error && (

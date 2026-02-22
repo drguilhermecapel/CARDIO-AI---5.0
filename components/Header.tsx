@@ -1,6 +1,11 @@
+
 import React from 'react';
 
-const Header: React.FC = () => {
+interface HeaderProps {
+  isPremium?: boolean;
+}
+
+const Header: React.FC<HeaderProps> = ({ isPremium }) => {
   return (
     <header className="glass-card sticky top-0 z-50 border-b border-white/5 backdrop-blur-3xl">
       <div className="max-w-7xl mx-auto px-6">
@@ -39,11 +44,15 @@ const Header: React.FC = () => {
              
              <div className="flex items-center gap-4">
                 <div className="text-right">
-                  <div className="text-[10px] text-white font-black uppercase tracking-widest">System Status</div>
-                  <div className="text-[9px] text-green-400 font-mono uppercase">Online // v7.0</div>
+                  <div className="text-[10px] text-white font-black uppercase tracking-widest">
+                    {isPremium ? 'ACCESS LEVEL: ALPHA' : 'ACCESS LEVEL: RESTRICTED'}
+                  </div>
+                  <div className={`text-[9px] font-mono uppercase ${isPremium ? 'text-green-400' : 'text-orange-400'}`}>
+                    {isPremium ? 'Premium Core // Unlocked' : 'Trial Protocol // 1 Credit'}
+                  </div>
                 </div>
-                <div className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center bg-slate-900 shadow-inner group cursor-pointer hover:border-cyan-500/50 transition-all">
-                   <div className="w-2 h-2 bg-green-500 rounded-full animate-ping"></div>
+                <div className={`w-10 h-10 rounded-full border border-white/10 flex items-center justify-center bg-slate-900 shadow-inner group cursor-pointer hover:border-cyan-500/50 transition-all`}>
+                   <div className={`w-2 h-2 rounded-full animate-ping ${isPremium ? 'bg-green-500' : 'bg-orange-500'}`}></div>
                 </div>
              </div>
           </div>

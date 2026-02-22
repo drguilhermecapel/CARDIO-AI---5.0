@@ -1,0 +1,27 @@
+steps:
+  # 1. Install Dependencies
+  - name: 'python:3.9'
+    entrypoint: 'pip'
+    args: ['install', '-r', 'requirements.txt', 'scikit-learn', 'tensorflow']
+
+  # 2. Run Unit Tests (Fast Fail)
+  - name: 'python:3.9'
+    entrypoint: 'pytest'
+    args: ['tests/unit']
+    env:
+      - 'PYTHONPATH=.'
+
+  # 3. Run Clinical Regression Check
+  # This script compares the current model/code against the baseline metrics.
+  - name: 'python:3.9'
+    entrypoint: 'python'
+    args: ['scripts/evaluate_pr.py', '--baseline_path', 'tests/baseline_metrics.json']
+    env:
+      - 'PYTHONPATH=.'
+      # In a real PR, you might pull the model from a GCS bucket or build artifact
+      - 'MODEL_PATH=models/hybrid/final_model' 
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: 600s

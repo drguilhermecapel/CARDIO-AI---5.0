@@ -1,154 +1,355 @@
 
-import React, { useState } from 'react';
-import { EcgAnalysisResult } from '../types';
+import React, { useState, useRef } from 'react';
+import { EcgAnalysisResult, PatientContext } from '../types';
 import EcgVisualizer from './EcgVisualizer';
 import Heart3D from './Heart3D';
+import MedicalReport from './MedicalReport';
 import { parseHeartRate } from '../utils/cardioLogic';
 import { generateHeartAnimation } from '../services/geminiService';
+
+// Declaration for the global html2pdf library loaded via script tag
+declare var html2pdf: any;
 
 interface AnalysisViewProps {
   result: EcgAnalysisResult;
   imagePreview: string;
   onReset: () => void;
+  patientContext?: PatientContext;
 }
 
-const IschemiaHUD: React.FC<{ analysis: any }> = ({ analysis }) => {
-  if (!analysis || (analysis.sgarbossaScore === 0 && !analysis.deWinterPattern && analysis.wellensSyndrome === 'None')) return null;
+const ALL_LEADS = ['I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6'];
+
+// --- COMPONENTES AUXILIARES ---
+
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { DigitizationMetrics } from '../types';
+
+// ... (existing imports)
+
+const DigitizedSignalView: React.FC<{ metrics?: DigitizationMetrics }> = ({ metrics }) => {
+  if (!metrics || !metrics.representativeBeats || metrics.representativeBeats.length === 0) return null;
 
   return (
-    <div className="glass-card p-8 rounded-[2.5rem] border border-rose-500/20 bg-rose-950/10 mb-8 animate-fade-in-up">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="bg-rose-500 p-2.5 rounded-xl shadow-lg shadow-rose-500/20">
-           <svg className="w-5 h-5 text-slate-950" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-             <path d="M13 10V3L4 14h7v7l9-11h-7z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-           </svg>
+    <div className="glass-card p-6 rounded-[2rem] border border-emerald-500/20 bg-emerald-900/5 mb-8 animate-fade-in-up">
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-3">
+           <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
+              <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+           </div>
+           <div>
+              <h3 className="text-sm font-black text-emerald-400 uppercase tracking-widest">ECG Digitiser Reconstruction</h3>
+              <p className="text-[9px] text-emerald-200/60 font-mono">PhysioNet 2024 Winner Methodology</p>
+           </div>
         </div>
-        <div>
-          <h3 className="text-xl font-black text-white uppercase tracking-tighter italic">Isquemia Crítica (OMI)</h3>
-          <p className="text-[10px] text-rose-400 font-mono uppercase font-black">Detecção de equivalentes de STEMI</p>
+        <div className="text-right">
+           <span className="text-[9px] text-slate-500 font-bold uppercase block">Segmentation Confidence</span>
+           <span className="text-xs font-mono text-emerald-300">{metrics.segmentationConfidence}%</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
-          <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest block mb-1">Sgarbossa Score</span>
-          <div className={`text-sm font-black italic ${analysis.sgarbossaScore >= 3 ? 'text-rose-500' : 'text-white'}`}>
-            {analysis.sgarbossaScore || 0} PTS
-          </div>
-        </div>
-        <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
-          <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest block mb-1">Ratio ST/S</span>
-          <div className={`text-sm font-black italic ${analysis.smithSgarbossaRatio < -0.25 ? 'text-rose-500 animate-pulse' : 'text-white'}`}>
-            {analysis.smithSgarbossaRatio || 'N/A'}
-          </div>
-        </div>
-        <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
-          <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest block mb-1">Síndrome de Wellens</span>
-          <div className="text-sm font-black text-white italic uppercase">{analysis.wellensSyndrome}</div>
-        </div>
-        <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
-          <span className="text-[9px] text-slate-500 uppercase font-black tracking-widest block mb-1">Padrão de Winter</span>
-          <div className={`text-xs font-black px-4 py-1 rounded-full ${analysis.deWinterPattern ? 'bg-rose-500 text-white' : 'bg-white/5 text-slate-500'}`}>
-            {analysis.deWinterPattern ? 'DETECTADO' : 'AUSENTE'}
-          </div>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {metrics.representativeBeats.map((beat, idx) => {
+           const data = beat.timeMs.map((t, i) => ({ time: t, amp: beat.amplitudeMv[i] }));
+           return (
+             <div key={idx} className="h-48 bg-black/20 rounded-xl border border-white/5 p-2 relative">
+                <span className="absolute top-2 left-2 text-[10px] font-black text-slate-500 uppercase bg-black/50 px-2 py-0.5 rounded">Lead {beat.lead}</span>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={data}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                    <XAxis dataKey="time" hide />
+                    <YAxis hide domain={['auto', 'auto']} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#000', border: '1px solid #333', borderRadius: '8px', fontSize: '10px' }}
+                      itemStyle={{ color: '#10b981' }}
+                      formatter={(val: number) => [val.toFixed(2) + ' mV', 'Amplitude']}
+                      labelFormatter={(label) => label + ' ms'}
+                    />
+                    <ReferenceLine y={0} stroke="#666" strokeDasharray="3 3" />
+                    <Line type="monotone" dataKey="amp" stroke="#10b981" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#fff' }} />
+                  </LineChart>
+                </ResponsiveContainer>
+             </div>
+           );
+        })}
+      </div>
+      
+      <div className="mt-4 flex gap-4 text-[9px] text-slate-500 font-mono uppercase">
+         <div className="flex items-center gap-1">
+            <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+            <span>Vectorized Signal</span>
+         </div>
+         <div className="flex items-center gap-1">
+            <div className="w-2 h-2 border border-slate-600 border-dashed"></div>
+            <span>Isoelectric Line</span>
+         </div>
       </div>
     </div>
   );
 };
 
-const ReasoningPathway: React.FC<{ reasoning: string; measurements: any }> = ({ reasoning, measurements }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+const NeuralInsightsHUD: React.FC<{ telemetry: any; onExplain?: () => void }> = ({ telemetry, onExplain }) => {
+    if (!telemetry) return null;
 
-  const getActiveFrameworks = () => {
-    const frameworks = [];
-    if (measurements.baranchukAnalysis && measurements.baranchukAnalysis.iabType !== 'None') frameworks.push('Baranchuk Algorithm');
-    if (measurements.arvdAnalysis && measurements.arvdAnalysis.epsilonWaveDetected) frameworks.push('ARVD Task Force');
-    if (measurements.ischemiaAnalysis && measurements.ischemiaAnalysis.sgarbossaScore > 0) frameworks.push('Smith-Sgarbossa');
-    return frameworks;
-  };
+    return (
+        <div className="glass-card p-6 rounded-[2rem] border border-cyan-500/20 bg-cyan-900/10 mb-8 animate-fade-in-up relative">
+            <div className="flex justify-between items-start mb-6">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center">
+                        <svg className="w-5 h-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-black text-cyan-400 uppercase tracking-widest">Neural Architecture</h3>
+                        <p className="text-[9px] text-cyan-200/60 font-mono">{telemetry.modelArchitecture || "Hybrid CNN + Transformer"}</p>
+                    </div>
+                </div>
+                <div className="text-right flex flex-col items-end gap-1">
+                    <div>
+                        <span className="text-[9px] text-slate-500 font-bold uppercase block">Inference Time</span>
+                        <span className="text-xs font-mono text-cyan-300">{telemetry.processingTimeMs}ms</span>
+                    </div>
+                    {onExplain && (
+                        <button 
+                            onClick={onExplain}
+                            className="mt-2 px-3 py-1 bg-cyan-500/20 hover:bg-cyan-500/40 border border-cyan-500/50 rounded text-[9px] text-cyan-300 font-black uppercase tracking-widest transition-all"
+                        >
+                            Explain AI Decision
+                        </button>
+                    )}
+                </div>
+            </div>
 
-  const frameworks = getActiveFrameworks();
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Differential Diagnoses Probabilities */}
+                <div>
+                    <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3 border-b border-white/5 pb-1">Probabilistic Differential</h4>
+                    <div className="space-y-3">
+                        {telemetry.differentialDiagnoses?.map((diag: any, idx: number) => (
+                            <div key={idx} className="relative group">
+                                <div className="flex justify-between text-[9px] font-bold uppercase text-slate-300 mb-1">
+                                    <span>{diag.diagnosis}</span>
+                                    <span>{diag.probability}%</span>
+                                </div>
+                                <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                                    <div 
+                                        className={`h-full rounded-full transition-all duration-1000 ${idx === 0 ? 'bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.5)]' : 'bg-slate-600'}`} 
+                                        style={{ width: `${diag.probability}%` }}
+                                    ></div>
+                                </div>
+                                <p className="text-[8px] text-slate-500 mt-1 opacity-0 group-hover:opacity-100 transition-opacity absolute top-full left-0 bg-black/90 p-2 rounded z-20 w-full">
+                                    {diag.reasoning}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
 
+                {/* Feature Attention */}
+                <div>
+                    <h4 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3 border-b border-white/5 pb-1">Attention Mechanism Focus</h4>
+                    <div className="flex flex-wrap gap-2 mb-4">
+                        {telemetry.attentionFocus?.map((lead: string) => (
+                            <span key={lead} className="px-2 py-1 rounded bg-cyan-500/10 border border-cyan-500/20 text-[9px] font-black text-cyan-400 uppercase">
+                                {lead}
+                            </span>
+                        ))}
+                        {(!telemetry.attentionFocus || telemetry.attentionFocus.length === 0) && (
+                            <span className="text-[9px] text-slate-600 italic">Global Attention</span>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                        <div className="p-2 bg-white/5 rounded border border-white/5">
+                            <span className="text-[8px] text-slate-500 uppercase block mb-1">CNN (Morphology)</span>
+                            <div className="flex flex-wrap gap-1">
+                                {telemetry.featureExtraction?.morphologicalFeatures?.slice(0,3).map((f: string, i: number) => (
+                                    <span key={i} className="text-[8px] text-slate-300 bg-black/40 px-1 rounded truncate max-w-full">{f}</span>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="p-2 bg-white/5 rounded border border-white/5">
+                            <span className="text-[8px] text-slate-500 uppercase block mb-1">Transformer (Rhythm)</span>
+                            <div className="flex flex-wrap gap-1">
+                                {telemetry.featureExtraction?.rhythmFeatures?.slice(0,3).map((f: string, i: number) => (
+                                    <span key={i} className="text-[8px] text-slate-300 bg-black/40 px-1 rounded truncate max-w-full">{f}</span>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const SignalQualityHUD: React.FC<{ quality: any }> = ({ quality }) => {
+    if (!quality) return null;
+    const snr = quality.snrDb || 0;
+    const isGood = snr > 20;
+    const isBad = snr < 10;
+    const color = isGood ? 'text-emerald-400' : (isBad ? 'text-rose-400' : 'text-amber-400');
+    const barColor = isGood ? 'bg-emerald-500' : (isBad ? 'bg-rose-500' : 'bg-amber-500');
+
+    return (
+        <div className="glass-card p-4 rounded-2xl border border-white/5 bg-white/5 mb-8 flex items-center justify-between gap-4">
+            <div className="flex flex-col">
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Signal Quality (DSP)</span>
+                <div className="flex items-center gap-2 mt-1">
+                    <div className="flex gap-0.5">
+                        {[1,2,3,4,5].map(i => (
+                            <div key={i} className={`w-1 h-3 rounded-sm ${snr >= i*5 ? barColor : 'bg-white/10'}`}></div>
+                        ))}
+                    </div>
+                    <span className={`text-xs font-mono font-bold ${color}`}>
+                        {snr} dB ({quality.baselineWander === 'None' ? 'Clean' : quality.baselineWander + ' Wander'})
+                    </span>
+                </div>
+            </div>
+            {quality.artifactsDetected?.length > 0 && (
+                <div className="text-right">
+                    <span className="text-[8px] font-black text-rose-500 uppercase">Artifacts</span>
+                    <p className="text-[10px] text-slate-400">{quality.artifactsDetected.join(', ')}</p>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const LeadReversalWarning: React.FC<{ validation: string }> = ({ validation }) => {
+  const isSuspicious = /reversal|troca|invert|swap|misplaced|errado|check|verificar|malpositioned/i.test(validation);
+  if (!isSuspicious) return null;
   return (
-    <div className="mt-8 space-y-4">
-      <div className="flex items-center justify-between mb-2">
-        <h5 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Neural Reasoning Pathway</h5>
-        <div className="flex gap-2">
-          {frameworks.map(f => (
-            <span key={f} className="px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-[8px] font-bold text-cyan-400 uppercase">
-              {f}
-            </span>
-          ))}
+    <div className="glass-card p-4 rounded-xl border border-orange-500/40 bg-orange-950/20 mb-4 flex items-center gap-4">
+        <svg className="w-6 h-6 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        <div>
+           <h4 className="text-sm font-bold text-orange-400 uppercase">Lead Reversal Detected</h4>
+           <p className="text-xs text-orange-200/60">{validation}</p>
         </div>
-      </div>
-
-      <div className="glass-card rounded-2xl border border-white/5 bg-black/40 overflow-hidden">
-        <div className="p-5 border-b border-white/5 flex items-center gap-4">
-          <div className="flex flex-col gap-1">
-             <div className="flex gap-1">
-               <div className="w-1 h-1 bg-cyan-400 rounded-full animate-pulse"></div>
-               <div className="w-1 h-1 bg-cyan-400/40 rounded-full"></div>
-             </div>
-             <span className="text-[8px] font-mono text-cyan-500/60 uppercase">Engine v6.1</span>
-          </div>
-          <div className="flex-1">
-            <p className="text-[10px] text-slate-400 font-medium leading-relaxed italic">
-              {isExpanded ? reasoning : `${reasoning.substring(0, 160)}...`}
-            </p>
-          </div>
-          <button onClick={() => setIsExpanded(!isExpanded)} className="text-[9px] font-black text-cyan-400 uppercase tracking-widest">
-            {isExpanded ? '[COLLAPSE]' : '[EXPAND]'}
-          </button>
-        </div>
-      </div>
     </div>
+  );
+};
+
+const RegulatoryHUD: React.FC<{ guidelines: string[] }> = ({ guidelines }) => {
+    if (!guidelines || guidelines.length === 0) return null;
+    return (
+        <div className="mb-4 flex gap-2 flex-wrap">
+            {guidelines.map((g, idx) => (
+                <span key={idx} className="px-2 py-1 rounded border border-white/10 bg-white/5 text-[9px] text-slate-400 font-mono uppercase">
+                    REF: {g}
+                </span>
+            ))}
+        </div>
+    );
+};
+
+const IschemiaHUD: React.FC<{ analysis: any }> = ({ analysis }) => {
+  if (!analysis) return null;
+  const hasSTTrend = analysis.stSegmentTrend && analysis.stSegmentTrend !== 'Neutral';
+  if (!hasSTTrend && !analysis.sgarbossaScore) return null;
+  
+  return (
+      <div className="glass-card p-6 rounded-2xl border border-indigo-500/20 bg-indigo-900/10 mb-8">
+          <h4 className="text-indigo-400 font-black uppercase tracking-widest text-xs mb-4">Ischemia & Infarction Analysis</h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div><span className="block text-[9px] text-slate-500">ST Trend</span><span className="text-sm text-white font-bold">{analysis.stSegmentTrend}</span></div>
+              <div><span className="block text-[9px] text-slate-500">Wall</span><span className="text-sm text-white font-bold">{analysis.affectedWall || 'N/A'}</span></div>
+              <div><span className="block text-[9px] text-slate-500">Culprit</span><span className="text-sm text-white font-bold">{analysis.culpritArtery || 'N/A'}</span></div>
+              <div><span className="block text-[9px] text-slate-500">Reciprocal</span><span className="text-sm text-white font-bold">{analysis.reciprocalChangesFound ? 'Yes' : 'No'}</span></div>
+          </div>
+      </div>
   );
 };
 
 const PacemakerHUD: React.FC<{ analysis: any }> = ({ analysis }) => {
-  if (!analysis || analysis.pacingMode === 'None') return null;
-  return (
-    <div className="glass-card p-8 rounded-[2.5rem] border border-emerald-500/20 bg-emerald-950/10 mb-8">
-      <h3 className="text-xl font-black text-white uppercase italic mb-6">Eletrofisiologia Digital</h3>
-      <div className="grid grid-cols-4 gap-6">
-        <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
-          <span className="text-[9px] text-slate-500 uppercase block mb-1">Mode</span>
-          <div className="text-sm font-black text-white">{analysis.pacingMode}</div>
+    if (!analysis || analysis.pacingMode === 'None') return null;
+    return (
+        <div className="glass-card p-4 rounded-xl border border-emerald-500/30 bg-emerald-900/10 mb-8">
+            <span className="text-emerald-400 font-black uppercase text-xs">Pacemaker Detected</span>
+            <div className="text-white text-sm mt-1">{analysis.pacingMode} Mode at {analysis.pacingSite}</div>
         </div>
-        <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
-          <span className="text-[9px] text-slate-500 uppercase block mb-1">Site</span>
-          <div className="text-sm font-black text-emerald-400">{analysis.pacingSite}</div>
-        </div>
-        <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
-          <span className="text-[9px] text-slate-500 uppercase block mb-1">Integrity</span>
-          <div className="text-sm font-black text-white">{analysis.captureIntegrity}</div>
-        </div>
-        <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
-          <span className="text-[9px] text-slate-500 uppercase block mb-1">Spike</span>
-          <div className="text-sm font-black text-white">{analysis.spikeAmplitude}</div>
-        </div>
-      </div>
-    </div>
-  );
+    );
 };
 
-const AnalysisView: React.FC<AnalysisViewProps> = ({ result, imagePreview, onReset }) => {
+const ReasoningPathway: React.FC<{ reasoning: string }> = ({ reasoning }) => (
+    <div className="mt-6 p-6 bg-black/20 rounded-2xl border border-white/5">
+        <h4 className="text-[10px] text-cyan-500 font-black uppercase tracking-widest mb-2">Diagnostic Logic & Reasoning</h4>
+        <p className="text-sm text-slate-300 leading-relaxed font-mono">{reasoning}</p>
+    </div>
+);
+
+
+// --- COMPONENTE PRINCIPAL ---
+
+const AnalysisView: React.FC<AnalysisViewProps> = ({ result, imagePreview, onReset, patientContext }) => {
   const [isVideoLoading, setIsVideoLoading] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const reportRef = useRef<HTMLDivElement>(null);
+  
+  const m = result.precisionMeasurements;
   
   const handleAnimate = async () => {
     setIsVideoLoading(true);
     try {
-      const url = await generateHeartAnimation(imagePreview.split(',')[1], result.diagnosis);
+      const url = await generateHeartAnimation(imagePreview, result.diagnosis);
       setVideoUrl(url);
     } catch (err) { alert("Erro na simulação."); } finally { setIsVideoLoading(false); }
   };
 
+  const handleExplain = async () => {
+    try {
+        const res = await fetch('/api/explain', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ analysisId: result.id, features: m })
+        });
+        const data = await res.json();
+        alert(`Explainable AI Analysis:\nMethod: ${data.method}\n\nTop Features:\n${data.attribution.map((a: any) => `- ${a.feature}: ${a.description} (Score: ${a.score})`).join('\n')}`);
+    } catch (e) {
+        alert("Failed to fetch explanation.");
+    }
+  };
+
+  const handleDownloadPDF = () => {
+    const element = reportRef.current;
+    if (!element) return;
+    const opt = {
+      margin: 0,
+      filename: `CardioAI_Laudo_${result.id || Date.now()}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+    html2pdf().set(opt).from(element).save();
+  };
+
+  // Safe accessors for nested wave data
+  const qrs = m.waves?.qrsComplex || { durationMs: m.qrsComplex?.durationMs || 0, axisDegrees: 0 };
+  const pr = m.waves?.intervals?.prMs || m.prIntervalMs || 0;
+
   return (
     <div className="max-w-7xl mx-auto pb-20 px-4 animate-fade-in-up">
-      <IschemiaHUD analysis={result.precisionMeasurements.ischemiaAnalysis} />
-      <PacemakerHUD analysis={result.precisionMeasurements.pacemakerAnalysis} />
+      
+      {/* Hidden Report for PDF */}
+      <div style={{ position: 'fixed', left: '-5000px', top: 0 }}>
+        <MedicalReport ref={reportRef} result={result} imagePreview={imagePreview} patientContext={patientContext} />
+      </div>
+
+      <RegulatoryHUD guidelines={result.guidelineReferences} />
+      <LeadReversalWarning validation={result.technicalQuality.leadPlacementValidation} />
+      
+      {/* NEW Neural Insights Panel */}
+      <NeuralInsightsHUD telemetry={m.neuralTelemetry} onExplain={handleExplain} />
+      
+      {/* ECG Digitiser View */}
+      <DigitizedSignalView metrics={m.digitizationMetrics} />
+      
+      <SignalQualityHUD quality={m.signalQuality} />
+      
+      <IschemiaHUD analysis={m.ischemiaAnalysis} />
+      <PacemakerHUD analysis={m.pacemakerAnalysis} />
 
       <div className="mb-10 grid grid-cols-1 lg:grid-cols-2 gap-8">
         <Heart3D 
@@ -156,6 +357,12 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ result, imagePreview, onRes
           urgency={result.urgency} 
           diagnosis={result.diagnosis}
           rhythm={result.rhythm}
+          numericAxis={qrs.axisDegrees}
+          structural={m.structuralAnalysis}
+          ischemia={m.ischemiaAnalysis}
+          conduction={m.conductionAnalysis}
+          qrsDurationMs={qrs.durationMs}
+          prIntervalMs={pr}
         />
         
         <div className="glass-card rounded-[3rem] p-8 flex flex-col justify-center relative overflow-hidden">
@@ -172,7 +379,12 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ result, imagePreview, onRes
                     </div>
                  ))}
               </div>
-              <button onClick={handleAnimate} disabled={isVideoLoading} className="w-full py-4 bg-cyan-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-white transition-all shadow-lg shadow-cyan-500/20">
+              <button 
+                data-html2canvas-ignore="true"
+                onClick={handleAnimate} 
+                disabled={isVideoLoading} 
+                className="w-full py-4 bg-cyan-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-white transition-all shadow-lg shadow-cyan-500/20"
+              >
                 {isVideoLoading ? 'Gerando Modelo 3D...' : 'Visualizar Fisiopatologia'}
               </button>
             </div>
@@ -184,8 +396,33 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ result, imagePreview, onRes
         <div className="lg:col-span-4 space-y-6">
           <div className={`glass-card p-8 rounded-[2.5rem] border-l-[12px] shadow-2xl ${result.urgency === 'Emergency' ? 'border-rose-500' : 'border-cyan-500'}`}>
              <h2 className="text-white text-3xl font-black uppercase italic leading-tight mb-4">{result.diagnosis}</h2>
-             <ReasoningPathway reasoning={result.clinicalReasoning} measurements={result.precisionMeasurements} />
+             <ReasoningPathway reasoning={result.clinicalReasoning} />
           </div>
+          
+          {/* Detailed Wave Metrics Table */}
+          {m.waves && (
+              <div className="glass-card p-6 rounded-2xl">
+                  <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Precision Wave Metrics</h4>
+                  <div className="space-y-3 text-xs">
+                      <div className="flex justify-between border-b border-white/5 pb-1">
+                          <span className="text-slate-400">P-Wave Duration</span>
+                          <span className="font-mono text-white">{m.waves.pWave?.durationMs}ms</span>
+                      </div>
+                      <div className="flex justify-between border-b border-white/5 pb-1">
+                          <span className="text-slate-400">QRS Duration</span>
+                          <span className="font-mono text-white">{m.waves.qrsComplex?.durationMs}ms</span>
+                      </div>
+                      <div className="flex justify-between border-b border-white/5 pb-1">
+                          <span className="text-slate-400">QRS Axis</span>
+                          <span className="font-mono text-white">{m.waves.qrsComplex?.axisDegrees}°</span>
+                      </div>
+                      <div className="flex justify-between border-b border-white/5 pb-1">
+                          <span className="text-slate-400">QTc (Fridericia)</span>
+                          <span className="font-mono text-white">{m.waves.intervals?.qtcMs}ms</span>
+                      </div>
+                  </div>
+              </div>
+          )}
         </div>
 
         <div className="lg:col-span-8">
@@ -197,9 +434,12 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ result, imagePreview, onRes
         </div>
       </div>
 
-      <div className="fixed bottom-10 left-1/2 -translate-x-1/2 no-print z-[100]">
-        <button onClick={onReset} className="px-12 py-5 bg-white text-slate-950 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-cyan-400 transition-all shadow-2xl">
-          NOVA ANÁLISE BIO-ELÉTRICA
+      <div className="fixed bottom-10 left-1/2 -translate-x-1/2 no-print z-[100] flex gap-4 w-full justify-center" data-html2canvas-ignore="true">
+        <button onClick={handleDownloadPDF} className="px-8 py-5 bg-cyan-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-cyan-400 transition-all shadow-2xl flex items-center gap-2 group">
+          Exportar Laudo Oficial
+        </button>
+        <button onClick={onReset} className="px-8 py-5 bg-white text-slate-950 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-all shadow-2xl">
+          NOVA ANÁLISE
         </button>
       </div>
     </div>
