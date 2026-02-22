@@ -207,6 +207,37 @@ export const enrichAnalysisWithLogic = (result: EcgAnalysisResult, patientCtx?: 
       implications.unshift("⚠️ REPEAT ECG: Signal quality precludes definitive analysis.");
   }
 
+  // 6. Wide QRS Consistency Check
+  const qrsDur = waves?.qrsComplex?.durationMs || m.qrsComplex?.durationMs || 0;
+  if (qrsDur >= 120) {
+      const diagLower = diagnosis.toLowerCase();
+      const hasWideCause = diagLower.includes('block') || diagLower.includes('bundle') || 
+                           diagLower.includes('ventricular') || diagLower.includes('ivcd') || 
+                           diagLower.includes('wide') || diagLower.includes('paced') ||
+                           diagLower.includes('pre-excitation') || diagLower.includes('wpw');
+      
+      if (!hasWideCause) {
+          reasoning += ` [AUTO-CHECK: Wide QRS detected (${qrsDur}ms) but no specific conduction delay diagnosed. Consider Nonspecific Intraventricular Conduction Delay (IVCD).]`;
+          if (!diagnosis.includes('IVCD')) {
+              diagnosis += " + Nonspecific IVCD";
+          }
+      }
+  }
+
+  // 7. PR Interval Check
+  const prInterval = waves?.intervals?.prMs || 0;
+  if (prInterval > 200 && !diagnosis.toLowerCase().includes('block')) {
+      reasoning += ` [AUTO-CHECK: Prolonged PR interval (${prInterval}ms) detected. Suggests 1st Degree AV Block.]`;
+      if (!diagnosis.includes('Block')) {
+          diagnosis += " + 1st Degree AV Block";
+      }
+  } else if (prInterval > 0 && prInterval < 120 && !diagnosis.toLowerCase().includes('wpw') && !diagnosis.toLowerCase().includes('pre-excitation') && !diagnosis.toLowerCase().includes('lgl')) {
+      // Only flag short PR if rhythm is Sinus (not Junctional/Atrial Tach which naturally have short/no PR)
+      if (diagnosis.toLowerCase().includes('sinus')) {
+          reasoning += ` [AUTO-CHECK: Short PR interval (${prInterval}ms). Consider Pre-excitation (WPW) or LGL syndrome.]`;
+      }
+  }
+
   return {
     ...result,
     diagnosis,

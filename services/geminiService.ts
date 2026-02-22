@@ -116,6 +116,7 @@ const ANALYSIS_SCHEMA = {
             wellensSyndrome: { type: Type.STRING },
             deWinterPattern: { type: Type.BOOLEAN },
             stSegmentTrend: { type: Type.STRING },
+            stSegmentDepression: { type: Type.STRING, description: "Details of ST depression (type, magnitude, leads)." },
             stShape: { type: Type.STRING },
             affectedWall: { type: Type.STRING },
             reciprocalChangesFound: { type: Type.BOOLEAN },
@@ -204,6 +205,13 @@ export const analyzeEcgImage = async (base64Data: string, mimeType: string, pati
             - **Dextrocardia:** Global inversion in I + poor R progression V1-V6.
             - **Signal Quality:** Noise, 60Hz interference, wandering baseline.
             - **Axis Calculation:** Hexaxial reference system (precise degrees).
+            - **QRS Duration:** Measure precise duration in ms. Normal < 100ms. 
+              - 100-120ms: Incomplete Block / IVCD.
+              - >120ms: Complete Bundle Branch Block / Ventricular Rhythm / Pre-excitation.
+            - **PR Interval:** Measure from start of P to start of QRS.
+              - Normal: 120-200ms.
+              - Short (<120ms): Pre-excitation (WPW) or LGL.
+              - Prolonged (>200ms): 1st Degree AV Block.
 
             **NOISE RESILIENCE PROTOCOL (For Wave Detection):**
             - **P-Wave:** If baseline is noisy, look for consistent P-waves in Lead II and V1. Use the "average beat" morphology to exclude artifacts.
@@ -315,6 +323,10 @@ export const analyzeEcgImage = async (base64Data: string, mimeType: string, pati
             PHASE 4: ISCHEMIA & INFARCTION (The OMI Paradigm)
             - **STEMI:** Classic ST Elevation >1mm contiguous leads.
             - **NSTEMI / OMI (Occlusion MI):** 
+              * *ST Depression:* 
+                - **Horizontal/Downsloping:** Highly specific for ischemia. >0.5mm in 2 contiguous leads.
+                - **Upsloping:** Non-specific, but if >1mm at J-point + 80ms (De Winter), it's OMI.
+                - **Reciprocal:** ST depression in leads opposite to ST elevation (confirms STEMI).
               * *Wellens' Syndrome:* Type A (Biphasic V2-V3), Type B (Deep Inversion).
               * *de Winter's T-Waves:* J-point depression + tall symmetric T (Proximal LAD).
               * *Posterior MI:* Horizontal ST depression V1-V3, R/S > 1 V2, Posterior leads V7-V9 elevation.
