@@ -1,40 +1,24 @@
-from fastapi import Request, HTTPException
-from functools import wraps
-from .auth import AuthManager, TokenData
+from fastapi import HTTPException, Depends, status
+from typing import List
+from security.auth import AuthManager, User, TokenData
 
-class RBACMiddleware:
-    """
-    Role-Based Access Control Decorator/Dependency.
-    """
-    def __init__(self, required_roles: list):
-        self.required_roles = required_roles
+class RoleChecker:
+    def __init__(self, allowed_roles: List[str]):
+        self.allowed_roles = allowed_roles
 
-    async def __call__(self, request: Request):
-        # Extract token from header manually if needed, 
-        # but usually used with Depends(AuthManager.get_current_user)
-        # This class is best used as a dependency factory.
-        pass
-
-def require_role(roles: list):
-    """
-    FastAPI Dependency for RBAC.
-    Usage: @app.get("/", dependencies=[Depends(require_role(["admin"]))])
-    """
-    async def dependency(current_user_and_token = fastapi.Depends(AuthManager.get_current_user)):
-        user, token_data = current_user_and_token
-        AuthManager.check_permissions(token_data, roles)
-        return user
-    return dependency
-
-# Helper for route decorators if preferred
-import fastapi
-
-def RoleChecker(allowed_roles: list):
-    async def _role_checker(user_data = fastapi.Depends(AuthManager.get_current_user)):
+    def __call__(self, user_data: tuple = Depends(AuthManager.get_current_user)):
         user, token_data = user_data
-        if token_data.role not in allowed_roles:
-            raise HTTPException(status_code=403, detail="Operation not permitted")
+        
+        if token_data.role not in self.allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail=f"Operation not permitted for role: {token_data.role}"
+            )
+            
         if not token_data.mfa_verified:
-             raise HTTPException(status_code=403, detail="MFA required")
+             raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="MFA verification required"
+            )
+            
         return user
-    return _role_checker

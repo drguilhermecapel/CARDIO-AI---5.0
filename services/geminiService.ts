@@ -350,21 +350,29 @@ export const analyzeEcgImage = async (base64Data: string, mimeType: string, pati
               * Trifascicular (Bifascicular + 1st Deg AVB).
               * Interatrial Block (Bayés Syndrome).
 
-            PHASE 4: ISCHEMIA & INFARCTION (The OMI Paradigm)
-            - **STEMI:** Classic ST Elevation >1mm contiguous leads.
-            - **NSTEMI / OMI (Occlusion MI):** 
+            PHASE 4: ISCHEMIA & INFARCTION (The OMI Paradigm - Occlusion Myocardial Infarction)
+            - **ST Segment Analysis (Crucial):**
+              * **J-Point Measurement:** Measure J-point amplitude relative to the PQ junction (TP segment if PQ is unstable).
+              * **Subtle Changes:** Detect ST elevation or depression even < 1mm (0.5mm is significant in V2-V3 for women or if reciprocal changes exist).
+              * **Morphology:** Look for straightening of the ST segment (loss of upward concavity) which is an early sign of OMI.
+            - **STEMI:** Classic ST Elevation >1mm contiguous leads (or >1.5-2.5mm in V2-V3 depending on age/sex).
+            - **NSTEMI / OMI (Occlusion MI) - Subtle Signs:** 
               * *ST Depression:* 
                 - **Horizontal/Downsloping:** Highly specific for ischemia. >0.5mm in 2 contiguous leads.
                 - **Upsloping:** Non-specific, but if >1mm at J-point + 80ms (De Winter), it's OMI.
-                - **Reciprocal:** ST depression in leads opposite to ST elevation (confirms STEMI).
+                - **Reciprocal:** ST depression in leads opposite to ST elevation (confirms STEMI). Always check aVL for inferior MI reciprocal changes.
+              * *T-Wave Abnormalities:*
+                - **Hyperacute T-waves:** Broad based, symmetric, high amplitude relative to QRS (often > 50-75% of R-wave). Earliest sign of OMI.
+                - **Inverted T-waves:** Symmetric inversion suggests ischemia. Deep inversion (>5mm) suggests Wellens (LAD) or CNS event.
+                - **Biphasic T-waves:** Up-down (Wellens Type A) or Down-up (Hypokalemia/Ischemia).
               * *Wellens' Syndrome:* Type A (Biphasic V2-V3), Type B (Deep Inversion).
-              * *de Winter's T-Waves:* J-point depression + tall symmetric T (Proximal LAD).
-              * *Posterior MI:* Horizontal ST depression V1-V3, R/S > 1 V2, Posterior leads V7-V9 elevation.
+              * *de Winter's T-Waves:* J-point depression (1-3mm) + tall symmetric T-waves in V1-V4 (Proximal LAD occlusion).
+              * *Posterior MI:* Horizontal ST depression V1-V3, R/S > 1 V2, Prominent T-wave V1-V2.
               * *Left Main / Triple Vessel:* STE aVR > V1 + diffuse STD (6+ leads).
-              * *Aslanger's Pattern:* Inferior OMI with multi-vessel disease.
+              * *Aslanger's Pattern:* Inferior OMI with multi-vessel disease (STE III only + STD in others).
               * *South African Flag Sign:* High lateral OMI (STE I, aVL, V2 + STD III).
-              * *Shark Fin Sign:* Massive triangular STE (Lambda wave).
-            - **LBBB/Paced Ischemia:** Sgarbossa Criteria (Concordant STE, Concordant STD, Discordant excessive STE).
+              * *Shark Fin Sign:* Massive triangular STE (Lambda wave) - High mortality risk.
+            - **LBBB/Paced Ischemia:** Sgarbossa Criteria (Concordant STE >1mm, Concordant STD >1mm V1-V3, Discordant excessive STE >25% of S-wave).
             
             **Localization of Infarction (for 'affectedWall' and 'culpritArtery'):**
             - Septal: V1-V2 (Proximal LAD).
