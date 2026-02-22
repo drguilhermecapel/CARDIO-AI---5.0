@@ -1,16 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request, Response
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import datetime
 import uuid
+import json
 
 from app.db.models import get_db, ECGRecord, Patient, User
 from app.worker import analyze_ecg_task
-from security.auth import AuthManager, TokenData # Reusing previous auth logic
+from security.auth import AuthManager, TokenData
 from security.rbac import RoleChecker
+from reporting.clinical_generator import ClinicalReportGenerator
 
 router = APIRouter()
+report_gen = ClinicalReportGenerator()
 
 # --- Schemas ---
 class ECGUpload(BaseModel):
@@ -77,9 +80,6 @@ async def get_result(
     if not record:
         raise HTTPException(status_code=404, detail="ECG not found")
     
-    # Check Celery status if still processing? 
-    # For now, rely on DB status updated by worker (mocked in worker)
-    
     return {
         "id": record.id,
         "status": record.status,
@@ -87,6 +87,58 @@ async def get_result(
         "confidence": record.confidence,
         "timestamp": record.timestamp
     }
+
+@router.get("/{id}/report/pdf")
+async def get_pdf_report(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(AuthManager.get_current_user)
+):
+    """
+    Download clinical PDF report.
+    """
+    record = db.query(ECGRecord).filter(ECGRecord.id == id).first()
+    if not record or not record.report_json:
+        raise HTTPException(status_code=404, detail="Report not available")
+        
+    # Mock Patient Data (In real app, fetch from Patient table)
+    patient_data = {
+        "id": record.patient_id,
+        "name": "John Doe", # Mock
+        "dob": "1980-01-01"
+    }
+    
+    # Generate Report
+    # We use the stored JSON report from the analysis
+    analysis_result = record.report_json
+    
+    # Generate full structure
+    full_report = report_gen.generate_report(analysis_result, patient_data)
+    
+    # Render PDF
+    pdf_bytes = report_gen.export_to_pdf(full_report)
+    
+    return Response(content=pdf_bytes, media_type="application/pdf", headers={
+        "Content-Disposition": f"attachment; filename=ECG_Report_{id}.pdf"
+    })
+
+@router.get("/{id}/report/fhir")
+async def get_fhir_observation(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(AuthManager.get_current_user)
+):
+    """
+    Get FHIR R4 Observation resource.
+    """
+    record = db.query(ECGRecord).filter(ECGRecord.id == id).first()
+    if not record or not record.report_json:
+        raise HTTPException(status_code=404, detail="Report not available")
+        
+    analysis_result = record.report_json
+    fhir_resource = report_gen.generate_fhir_observation(analysis_result, record.patient_id)
+    
+    return fhir_resource
 
 @router.get("/history/{patient_id}", response_model=List[ECGResponse])
 async def get_history(
@@ -146,8 +198,6 @@ async def review_ecg(
     
     if review.diagnosis_correction:
         record.diagnosis_main = review.diagnosis_correction
-        # Trigger feedback loop for retraining
-        # feedback_system.submit(...)
         
     db.commit()
     return {"status": "reviewed"}

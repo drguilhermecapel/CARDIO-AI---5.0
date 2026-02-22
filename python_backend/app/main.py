@@ -5,7 +5,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
-from app.api.v1.endpoints import ecg, worklist
+from app.api.v1.endpoints import ecg, worklist, explainability
 from app.db.models import Base, engine
 
 # Create Tables
@@ -32,6 +32,7 @@ app.add_middleware(
 # Routers
 app.include_router(ecg.router, prefix=f"{settings.API_V1_STR}/ecg", tags=["ECG"])
 app.include_router(worklist.router, prefix=f"{settings.API_V1_STR}/worklist", tags=["Worklist"])
+app.include_router(explainability.router, prefix=f"{settings.API_V1_STR}/explainability", tags=["Explainability"])
 
 @app.get("/health")
 def health_check():
