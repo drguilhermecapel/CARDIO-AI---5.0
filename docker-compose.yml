@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: python_backend/Dockerfile.secure
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./python_backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db/cardioai
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - PYTHONPATH=/app
+    depends_on:
+      - db
+      - redis
+    networks:
+      - cardio-net
+
+  worker:
+    build:
+      context: .
+      dockerfile: python_backend/Dockerfile.secure
+    command: celery -A app.worker.celery_app worker --loglevel=info
+    volumes:
+      - ./python_backend:/app
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db/cardioai
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - PYTHONPATH=/app
+    depends_on:
+      - db
+      - redis
+    networks:
+      - cardio-net
+
+  db:
+    image: postgres:15-alpine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=cardioai
+    networks:
+      - cardio-net
+
+  redis:
+    image: redis:alpine
+    networks:
+      - cardio-net
+
+volumes:
+  postgres_data:
+
+networks:
+  cardio-net:
+    driver: bridge
