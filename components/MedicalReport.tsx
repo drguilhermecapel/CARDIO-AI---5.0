@@ -147,6 +147,85 @@ const MedicalReport = React.forwardRef<HTMLDivElement, MedicalReportProps>(({ re
          </div>
       </div>
 
+      {/* OPTIMIZED REPORT (ETAPA 9) */}
+      {result.optimizedReport && (
+        <div className="mb-6 p-4 border-2 border-slate-800 bg-slate-50 rounded">
+           <h3 className="text-[12px] font-black uppercase text-slate-900 mb-3 border-b-2 border-slate-300 pb-1">Relatório Otimizado (Protocolo Universal)</h3>
+           
+           <div className="grid grid-cols-2 gap-4 text-[10px] mb-4">
+              <div>
+                 <p><span className="font-bold text-slate-600">Qualidade de Aquisição:</span> {result.optimizedReport.acquisition_quality.toUpperCase()}</p>
+                 <p><span className="font-bold text-slate-600">Frequência Cardíaca:</span> {result.optimizedReport.heart_rate.value} {result.optimizedReport.heart_rate.unit} ({result.optimizedReport.heart_rate.classification})</p>
+                 <p><span className="font-bold text-slate-600">Ritmo Primário:</span> {result.optimizedReport.rhythm.primary}</p>
+                 <p><span className="font-bold text-slate-600">Regularidade:</span> {result.optimizedReport.rhythm.regularity}</p>
+              </div>
+              <div>
+                 <p><span className="font-bold text-slate-600">Intervalos:</span> PR {result.optimizedReport.intervals.PR_ms}ms | QRS {result.optimizedReport.intervals.QRS_ms}ms | QT {result.optimizedReport.intervals.QT_ms}ms</p>
+                 <p><span className="font-bold text-slate-600">QTc (Bazett/Fridericia):</span> {result.optimizedReport.intervals.QTc_Bazett_ms}ms / {result.optimizedReport.intervals.QTc_Fridericia_ms}ms</p>
+                 <p><span className="font-bold text-slate-600">Eixo QRS:</span> {result.optimizedReport.axis.QRS_degrees}° ({result.optimizedReport.axis.classification})</p>
+              </div>
+           </div>
+
+           <div className="mb-4">
+              <h4 className="text-[10px] font-bold uppercase text-slate-700 mb-1">Achados Morfológicos</h4>
+              <ul className="list-disc list-inside text-[10px] space-y-1">
+                 {result.optimizedReport.waveform_findings.map((finding, idx) => (
+                    <li key={idx}>{finding}</li>
+                 ))}
+              </ul>
+           </div>
+
+           <div className="mb-4">
+              <h4 className="text-[10px] font-bold uppercase text-slate-700 mb-1">Diagnósticos</h4>
+              <div className="space-y-2">
+                 {result.optimizedReport.diagnoses.map((diag, idx) => (
+                    <div key={idx} className={`p-2 border rounded ${diag.alert_level === 'CRITICAL' ? 'bg-red-50 border-red-200' : diag.alert_level === 'URGENT' ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'}`}>
+                       <div className="flex justify-between items-center mb-1">
+                          <span className="font-bold text-[11px]">{diag.code}</span>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${diag.alert_level === 'CRITICAL' ? 'bg-red-600 text-white' : diag.alert_level === 'URGENT' ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                             {diag.alert_level}
+                          </span>
+                       </div>
+                       <p className="text-[10px]">{diag.description}</p>
+                       {(diag.supporting_leads?.length > 0 || diag.reciprocal_changes?.length > 0) && (
+                          <p className="text-[9px] text-slate-500 mt-1">
+                             {diag.supporting_leads?.length > 0 && `Derivações: ${diag.supporting_leads.join(', ')} `}
+                             {diag.reciprocal_changes?.length > 0 && `| Recíprocas: ${diag.reciprocal_changes.join(', ')}`}
+                          </p>
+                       )}
+                    </div>
+                 ))}
+              </div>
+           </div>
+
+           <div className="grid grid-cols-2 gap-4 text-[10px]">
+              <div>
+                 <h4 className="font-bold uppercase text-slate-700 mb-1">Recomendações</h4>
+                 <ul className="list-disc list-inside space-y-1">
+                    {result.optimizedReport.recommendations.map((rec, idx) => (
+                       <li key={idx} className="font-medium text-slate-800">{rec}</li>
+                    ))}
+                 </ul>
+              </div>
+              <div>
+                 <h4 className="font-bold uppercase text-slate-700 mb-1">Interações Medicamentosas</h4>
+                 <ul className="list-disc list-inside space-y-1">
+                    {result.optimizedReport.drug_interactions_flagged?.length > 0 ? 
+                       result.optimizedReport.drug_interactions_flagged.map((drug, idx) => (
+                          <li key={idx} className="text-amber-700">{drug}</li>
+                       )) : 
+                       <li className="text-slate-500">Nenhuma detectada</li>
+                    }
+                 </ul>
+              </div>
+           </div>
+           
+           <div className="mt-4 pt-2 border-t border-slate-200 text-[8px] text-slate-500 italic text-center">
+              {result.optimizedReport.disclaimer}
+           </div>
+        </div>
+      )}
+
       {/* ECG STRIP SNAPSHOT */}
       <div className="mb-4">
          <h3 className="text-[9px] font-bold uppercase mb-1">Visual Evidence (Lead II Rhythm Strip)</h3>

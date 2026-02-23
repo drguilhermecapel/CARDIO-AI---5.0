@@ -61,6 +61,7 @@ export const identifyEcgPattern = (
   if (conduction?.ivcdType === 'RBBB') return 'rbbb';
 
   // 5. RHYTHM
+  if (text.includes('avnrt') || text.includes('svt') || text.includes('taquicardia supraventricular') || text.includes('supraventricular tachycardia') || text.includes('intranodal')) return 'svt';
   if (text.includes('fibrilação atrial') || text.includes('afib')) return 'afib';
   if (text.includes('flutter')) return 'flutter';
   
@@ -95,34 +96,60 @@ const validateSinusRhythm = (waves: any, rate: number): boolean => {
     return normalRate && pPresent && regular;
 };
 
-const validateOMI = (ischemia: any, patientCtx?: PatientContext): { isOMI: boolean, type: string } => {
+const validateOMI = (ischemia: any, patientCtx?: PatientContext, diagnosisStr: string = '', reasoningStr: string = ''): { isOMI: boolean, type: string } => {
+    const diagLower = diagnosisStr.toLowerCase();
+    const reasonLower = reasoningStr.toLowerCase();
+    
+    const diagSaysStemi = diagLower.includes('stemi') || 
+                          diagLower.includes('infarto com supra') || 
+                          diagLower.includes('infarto agudo do miocárdio com supradesnivelamento') ||
+                          diagLower.includes('iamcsst') ||
+                          diagLower.includes('iam com supra') ||
+                          diagLower.includes('supra de st') ||
+                          diagLower.includes('supradesnivelamento');
+
+    const reasonSaysStemi = reasonLower.includes('st elevation') ||
+                            reasonLower.includes('supradesnivelamento de st') ||
+                            reasonLower.includes('supra de st') ||
+                            reasonLower.includes('stemi');
+
+    if (diagSaysStemi || reasonSaysStemi) return { isOMI: true, type: 'STEMI' };
+
     if (!ischemia) return { isOMI: false, type: '' };
     
     // Check for specific OMI equivalents
     if (ischemia.deWinterPattern) return { isOMI: true, type: 'De Winter T-Waves (LAD Occlusion)' };
-    if (ischemia.wellensSyndrome && ischemia.wellensSyndrome !== 'None') return { isOMI: true, type: `Wellens Syndrome (${ischemia.wellensSyndrome})` };
+    if (ischemia.wellensSyndrome && ischemia.wellensSyndrome !== 'None' && ischemia.wellensSyndrome !== 'No') return { isOMI: true, type: `Wellens Syndrome (${ischemia.wellensSyndrome})` };
     if (ischemia.sgarbossaScore >= 3) return { isOMI: true, type: 'Sgarbossa Positive (LBBB/Paced Infarction)' };
     
     // Posterior MI Check
-    // Often indicated by ST depression in V1-V3 (reciprocal), or Elevation in V7-V9
-    if (ischemia.affectedWall?.includes('Posterior')) {
-         // If wall is Posterior, it's an OMI equivalent (STEMI equivalent)
+    if (ischemia.affectedWall?.toLowerCase().includes('posterior')) {
          return { isOMI: true, type: 'Posterior MI' };
     }
 
     // Left Main / Triple Vessel
-    // STE aVR > V1 is a strong indicator if diffuse depression exists
-    if (ischemia.affectedWall?.includes('Left Main') || ischemia.culpritArtery?.includes('Left Main')) {
+    if (ischemia.affectedWall?.toLowerCase().includes('left main') || ischemia.culpritArtery?.toLowerCase().includes('left main')) {
         return { isOMI: true, type: 'Left Main / Triple Vessel Disease' };
     }
     
     // Check for classic STEMI
-    const isElevation = ischemia.stSegmentTrend === 'Elevation';
+    const trend = ischemia.stSegmentTrend?.toLowerCase() || '';
+    const isElevation = trend.includes('elevation') || trend.includes('stemi') || trend.includes('supra');
     const hasReciprocal = ischemia.reciprocalChangesFound;
-    const hasSymptoms = patientCtx?.symptoms?.some((s: string) => s.toLowerCase().includes('chest') || s.toLowerCase().includes('dor'));
+    const hasSymptoms = patientCtx?.symptoms?.some((s: string) => s.toLowerCase().includes('chest') || s.toLowerCase().includes('dor') || s.toLowerCase().includes('pain'));
+    const wallDefined = !!ischemia.affectedWall && ischemia.affectedWall !== 'None';
+    const isConvex = ischemia.stShape?.toLowerCase() === 'convex' || ischemia.stShape?.toLowerCase() === 'tombstone';
     
-    if (isElevation && (hasReciprocal || hasSymptoms || ischemia.affectedWall)) return { isOMI: true, type: 'STEMI' };
-    
+    // If we have Elevation, it is highly likely a STEMI in a clinical context unless proven otherwise
+    if (isElevation) {
+        // If it's explicitly concave and no symptoms/reciprocal changes, it might be BER, but we err on the side of caution
+        // Do NOT downgrade if the model explicitly diagnosed STEMI
+        if (!diagSaysStemi && ischemia.stShape?.toLowerCase() === 'concave' && !hasSymptoms && !hasReciprocal && !wallDefined) {
+            return { isOMI: false, type: '' }; // Handled by pericarditis check later
+        }
+        return { isOMI: true, type: 'STEMI' };
+    }
+
     return { isOMI: false, type: '' };
 };
 
@@ -131,26 +158,47 @@ export const enrichAnalysisWithLogic = (result: EcgAnalysisResult, patientCtx?: 
   const waves = m.waves;
   const hr = parseHeartRate(result.heartRate);
   
-  let implications = [...result.clinicalImplications];
+  let implications = [...(result.clinicalImplications || [])];
   let urgency = result.urgency;
   let diagnosis = result.diagnosis;
   let reasoning = result.clinicalReasoning;
   
   // --- GUARDRAIL EXECUTION ---
 
-  // 1. Sinus Rhythm Validation
-  if (diagnosis.toLowerCase().includes('sinus rhythm')) {
-      if (!validateSinusRhythm(waves, hr)) {
-          if (hr > 100 && diagnosis.includes('Tachycardia')) { /* Valid */ } 
-          else if (hr < 60 && diagnosis.includes('Bradycardia')) { /* Valid */ } 
-          else if (waves?.intervals?.rrRegularity !== 'Regular') {
-             reasoning += " [AUTO-CHECK: Irregular RR intervals detected. Consider Sinus Arrhythmia or subtle Atrial Fibrillation.]";
+  // 1. Sinus Rhythm Validation & Arrhythmia Differentiation
+  if (diagnosis.toLowerCase().includes('sinus')) {
+      const isIrregular = waves?.intervals?.rrRegularity?.toLowerCase().includes('irregular');
+      const pWavesPresent = waves?.pWave?.present && waves?.pWave?.morphology === 'Sinus';
+
+      if (isIrregular) {
+          if (pWavesPresent) {
+              if (!diagnosis.toLowerCase().includes('arrhythmia')) {
+                  diagnosis = diagnosis.replace('Sinus Rhythm', 'Sinus Arrhythmia');
+                  reasoning += " [AUTO-CORRECT: Irregular rhythm with clear P-waves indicates Sinus Arrhythmia, not AFib.]";
+              }
+          } else {
+              // Irregular + No P-waves = Suspect AFib
+              reasoning += " [AUTO-CHECK: Irregular rhythm with absent/abnormal P-waves. Verify for Atrial Fibrillation.]";
           }
       }
   }
 
+  // 1.5 Atrial Fibrillation & MAT Differentiation
+  if (diagnosis.toLowerCase().includes('fibrilação atrial') || diagnosis.toLowerCase().includes('afib')) {
+      const pWavesPresent = waves?.pWave?.present;
+      const pMorphology = waves?.pWave?.morphology;
+      
+      if (pWavesPresent && pMorphology !== 'Fibrillatory' && pMorphology !== 'Absent') {
+           if (hr > 100 && waves?.intervals?.rrRegularity?.toLowerCase().includes('irregular')) {
+               reasoning += " [CAUTION: Diagnosis says AFib but P-waves are detected. If >3 morphologies, consider Multifocal Atrial Tachycardia (MAT).]";
+           } else {
+               reasoning += " [CAUTION: Diagnosis says AFib but P-waves are detected. Re-evaluate for Sinus Arrhythmia or MAT.]";
+           }
+      }
+  }
+
   // 2. OMI (Occlusion MI) / STEMI Protocol
-  const omiCheck = validateOMI(m.ischemiaAnalysis, patientCtx);
+  const omiCheck = validateOMI(m.ischemiaAnalysis, patientCtx, diagnosis, reasoning);
   if (omiCheck.isOMI) {
       if (urgency !== 'Emergency') {
           urgency = 'Emergency';
@@ -159,19 +207,27 @@ export const enrichAnalysisWithLogic = (result: EcgAnalysisResult, patientCtx?: 
       if (!implications.some(i => i.includes('Cath Lab'))) {
           implications.unshift("🚨 IMMEDIATE CATH LAB ACTIVATION (Time-to-Balloon Critical)");
       }
+      
+      // Update Diagnosis to reflect Critical Finding
+      if (!diagnosis.toLowerCase().includes(omiCheck.type.toLowerCase())) {
+          diagnosis = `${omiCheck.type} + ${diagnosis}`;
+      }
+
       // Append localization if available
       if (m.ischemiaAnalysis?.affectedWall && !diagnosis.includes(m.ischemiaAnalysis.affectedWall)) {
           diagnosis += ` - ${m.ischemiaAnalysis.affectedWall} Wall`;
       }
-  } else if (diagnosis.toLowerCase().includes('stemi') && m.ischemiaAnalysis?.stShape === 'Concave' && !patientCtx?.symptoms?.includes('Chest Pain')) {
-       // Pericarditis Mimic Check
-       diagnosis = "Suspected Pericarditis vs Early Repolarization";
-       urgency = "Routine";
-       reasoning += " [AUTO-CHECK: Concave ST elevation without reciprocal changes favors Pericarditis/BER over STEMI.]";
-       implications = implications.filter(i => !i.includes('STEMI'));
+  } else if (diagnosis.toLowerCase().includes('pericarditis') || diagnosis.toLowerCase().includes('early repolarization')) {
+       // If the model explicitly suspects Pericarditis or BER, we keep it as such, but maybe flag for review.
+       if (m.ischemiaAnalysis?.stSegmentTrend === 'Elevation' && urgency !== 'Emergency') {
+           reasoning += " [AUTO-CHECK: ST Elevation present. Ensure STEMI is ruled out.]";
+       }
   } else {
       // Check for NSTEMI / Ischemia (Urgent)
-      if (m.ischemiaAnalysis?.stSegmentTrend === 'Depression' || m.ischemiaAnalysis?.stSegmentTrend === 'T-Wave Inversion') {
+      const trend = m.ischemiaAnalysis?.stSegmentTrend?.toLowerCase() || '';
+      const depression = m.ischemiaAnalysis?.stSegmentDepression?.toLowerCase() || '';
+      
+      if (trend.includes('depression') || trend.includes('inversion') || depression.includes('horizontal') || depression.includes('downsloping')) {
           if (urgency === 'Routine') {
               urgency = 'Urgent';
               reasoning += " [AUTO-CHECK: Significant ST Depression or T-Wave Inversion detected. Suspect NSTEMI or Ischemia.]";
@@ -189,6 +245,14 @@ export const enrichAnalysisWithLogic = (result: EcgAnalysisResult, patientCtx?: 
       implications.unshift(`⚡ CRITICAL QTc (${qtc}ms): High risk of Torsades de Pointes. Monitor Magnesium/Potassium.`);
   }
 
+  // 3.5 Urgency Overrides based on Critical Findings
+  if (diagnosis.match(/Taquicardia Ventricular|Fibrilação Ventricular|BAVT|Bloqueio Atrioventricular Total|IAMCSST|Infarto.*Supradesnivelamento/i)) {
+    urgency = 'Emergency';
+    if (!implications.some(i => i.includes('Arritmia com risco de vida detectada'))) {
+        implications.unshift('Arritmia com risco de vida detectada. Acionar protocolo de emergência.');
+    }
+  }
+
   // 4. AV Block Validation
   const pr = waves?.intervals?.prMs || 0;
   if (diagnosis.toLowerCase().includes('1st degree') && pr < 200 && pr > 0) {
@@ -196,15 +260,24 @@ export const enrichAnalysisWithLogic = (result: EcgAnalysisResult, patientCtx?: 
   }
 
   // 5. Noise / Reliability Guardrail
-  const reliability = m.signalQuality?.reliabilityScore ?? 10;
-  if (reliability < 5) {
-      urgency = 'Routine'; // Downgrade urgency if we can't trust the signal (unless it was already routine)
-      // Or keep it but add a massive warning. Actually, for safety, we usually don't downgrade "Critical" to "Routine" blindly, 
-      // but we should warn.
-      // Let's just append a warning.
-      diagnosis = `[POOR QUALITY] ${diagnosis}`;
-      reasoning += ` [CAUTION: Low signal reliability score (${reliability}/10). Wave measurements may be inaccurate due to artifacts/noise.]`;
-      implications.unshift("⚠️ REPEAT ECG: Signal quality precludes definitive analysis.");
+  let reliability = m.signalQuality?.reliabilityScore ?? 100;
+  // Normalize reliability to 0-100 scale
+  if (reliability <= 1 && reliability > 0) reliability *= 100;
+  else if (reliability <= 10 && reliability > 1) reliability *= 10;
+  
+  let techScore = result.technicalQuality?.overallScore ?? 10;
+  // Normalize techScore to 0-10 scale
+  if (techScore > 10) techScore /= 10;
+
+  if (reliability < 50 || techScore < 5) {
+      // Only append [POOR QUALITY] if it's not already there
+      if (!diagnosis.includes('[POOR QUALITY]')) {
+          diagnosis = `[POOR QUALITY] ${diagnosis}`;
+      }
+      reasoning += ` [CAUTION: Low signal quality detected (Reliability: ${Math.round(reliability)}%, Tech Score: ${Math.round(techScore)}/10). Wave measurements may be inaccurate due to artifacts/noise.]`;
+      if (!implications.some(i => i.includes('REPEAT ECG'))) {
+          implications.unshift("⚠️ REPEAT ECG: Signal quality precludes definitive analysis.");
+      }
   }
 
   // 6. Wide QRS Consistency Check

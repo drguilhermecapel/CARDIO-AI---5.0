@@ -64,8 +64,9 @@ export interface IschemiaAnalysis {
   smithSgarbossaRatio?: number;
   wellensSyndrome: 'None' | 'Type A (Biphasic)' | 'Type B (Deep Inversion)';
   deWinterPattern: boolean;
-  stSegmentTrend: 'Elevation' | 'Depression' | 'Neutral';
-  stShape?: 'Concave' | 'Convex' | 'Horizontal' | 'Downsloping';
+  stSegmentTrend: 'Elevation' | 'Depression' | 'Neutral' | 'T-Wave Inversion';
+  stSegmentDepression?: string;
+  stShape?: 'Concave' | 'Convex' | 'Horizontal' | 'Downsloping' | 'Upsloping';
   affectedWall?: 'Anterior' | 'Inferior' | 'Lateral' | 'Septal' | 'Posterior' | 'Global' | 'Right Ventricle';
   reciprocalChangesFound: boolean;
   culpritArtery?: 'LAD' | 'RCA' | 'LCx' | 'Left Main' | 'Unknown';
@@ -135,6 +136,44 @@ export interface HospitalGradeReport {
   tempo_processamento: number;
 }
 
+export interface OptimizedReport {
+  patient_id: string;
+  ecg_date: string;
+  acquisition_quality: 'adequate' | 'suboptimal' | 'poor';
+  heart_rate: { value: number; unit: string; classification: string };
+  rhythm: {
+    primary: string;
+    secondary: string[];
+    regularity: string;
+  };
+  intervals: {
+    PR_ms: number;
+    QRS_ms: number;
+    QT_ms: number;
+    QTc_Bazett_ms: number;
+    QTc_Fridericia_ms: number;
+  };
+  axis: {
+    QRS_degrees: number;
+    P_degrees: number;
+    T_degrees: number;
+    classification: string;
+  };
+  waveform_findings: string[];
+  diagnoses: Array<{
+    code: string;
+    description: string;
+    confidence: number;
+    alert_level: 'CRITICAL' | 'URGENT' | 'ROUTINE';
+    supporting_leads: string[];
+    reciprocal_changes: string[];
+  }>;
+  drug_interactions_flagged: string[];
+  comparison_with_prior_ecg: string;
+  recommendations: string[];
+  disclaimer: string;
+}
+
 export interface EcgAnalysisResult {
   id?: string;
   timestamp?: number;
@@ -155,6 +194,9 @@ export interface EcgAnalysisResult {
   
   // New Hospital Grade Field
   hospitalGradeReport?: HospitalGradeReport;
+  
+  // Optimized Report (Etapa 9)
+  optimizedReport?: OptimizedReport;
 }
 
 export interface EcgRecord extends EcgAnalysisResult {

@@ -430,7 +430,86 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ result, imagePreview, onRes
             arrhythmias={[result.rhythm]}
             heartRate={result.heartRate}
             diagnosis={result.diagnosis}
+            fullResult={result}
           />
+        </div>
+      </div>
+
+      {/* HUMAN-IN-THE-LOOP ADJUDICATION PANEL */}
+      <div className="glass-card border border-slate-700 rounded-3xl p-8 max-w-4xl mx-auto mt-10 mb-20 animate-fade-in-up">
+        <div className="flex items-center gap-4 mb-8 border-b border-white/10 pb-6">
+          <div className="w-12 h-12 rounded-full bg-indigo-500/20 flex items-center justify-center shrink-0">
+            <svg className="w-6 h-6 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-2xl font-black text-white uppercase italic tracking-tighter">Human-in-the-Loop Adjudication</h2>
+            <p className="text-slate-400 text-[11px] font-mono mt-1">Review AI findings, validate beat-level classifications, and provide clinical consensus.</p>
+          </div>
+        </div>
+
+        <div className="space-y-8">
+          {/* Adjudication Actions */}
+          <div>
+            <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Clinical Decision</h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <button 
+                onClick={() => alert('Approved: Added to validated dataset for continuous learning.')}
+                className="flex flex-col items-center justify-center gap-3 p-6 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/50 rounded-2xl transition-all group"
+              >
+                <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <svg className="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <div className="text-center">
+                  <div className="font-bold text-emerald-400">Approve AI Findings</div>
+                  <div className="text-[10px] text-slate-400 mt-1">Add to validated dataset</div>
+                </div>
+              </button>
+
+              <button 
+                onClick={() => alert('Modify: Open interface to correct false positives/negatives.')}
+                className="flex flex-col items-center justify-center gap-3 p-6 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/50 rounded-2xl transition-all group"
+              >
+                <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <svg className="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </div>
+                <div className="text-center">
+                  <div className="font-bold text-amber-400">Modify Diagnosis</div>
+                  <div className="text-[10px] text-slate-400 mt-1">Correct false positives/negatives</div>
+                </div>
+              </button>
+
+              <button 
+                onClick={() => alert('Rejected: Flagged as artifact or non-diagnostic.')}
+                className="flex flex-col items-center justify-center gap-3 p-6 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 hover:border-rose-500/50 rounded-2xl transition-all group"
+              >
+                <div className="w-12 h-12 rounded-full bg-rose-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <svg className="w-6 h-6 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </div>
+                <div className="text-center">
+                  <div className="font-bold text-rose-400">Reject / Artifact</div>
+                  <div className="text-[10px] text-slate-400 mt-1">Flag as non-diagnostic</div>
+                </div>
+              </button>
+            </div>
+          </div>
+          
+          {/* Audit Log */}
+          <div className="pt-6 border-t border-white/5">
+            <div className="text-[9px] text-slate-500 font-mono uppercase">
+              <p>Pipeline: Hybrid CNN + Temporal Transformer</p>
+              <p>Dataset Target: MIT-BIH Arrhythmia / PTB-XL</p>
+              <p>Compliance: Ready for ISO 14971 Risk Analysis logging</p>
+            </div>
+          </div>
         </div>
       </div>
 

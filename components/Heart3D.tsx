@@ -109,64 +109,108 @@ const Heart3D: React.FC<Heart3DProps> = ({
     scene.add(heartGroup);
 
     // 1. LEFT VENTRICLE (The Powerhouse)
-    // Elongated sphere, slightly pointed for Apex
+    // Elongated, conical shape
     const lvScale = structural?.lvhDetected ? 1.4 : 1.0; // Hypertrophy Logic
     const lvGeom = new THREE.SphereGeometry(1.4 * lvScale, 64, 64);
-    lvGeom.scale(0.85, 1.3, 0.85); // Make it oblong
+    lvGeom.scale(0.8, 1.4, 0.8); // More conical
     const lvMesh = new THREE.Mesh(lvGeom, muscleMat.clone());
-    lvMesh.position.set(0.3, -0.5, 0); // Offset to left (anatomical)
-    lvMesh.rotation.z = -0.3;
+    lvMesh.position.set(0.2, -0.6, -0.2); // Apex points down, left, anterior
+    lvMesh.rotation.z = -0.5;
+    lvMesh.rotation.x = 0.2;
     lvMesh.castShadow = true;
     lvMesh.receiveShadow = true;
-    lvMesh.userData = { name: 'LV' }; // For animation targeting
+    lvMesh.userData = { name: 'LV' }; 
     heartGroup.add(lvMesh);
 
     // 2. RIGHT VENTRICLE (The Crescent)
-    // Smaller sphere intersecting anteriorly
+    // Wraps around the anterior/right aspect of LV
     const rvScale = structural?.rvhDetected ? 1.3 : 1.0;
-    const rvGeom = new THREE.SphereGeometry(1.1 * rvScale, 54, 54);
-    rvGeom.scale(0.9, 1.1, 0.7);
+    const rvGeom = new THREE.SphereGeometry(1.2 * rvScale, 54, 54);
+    rvGeom.scale(0.9, 1.2, 0.6);
     const rvMesh = new THREE.Mesh(rvGeom, muscleMat.clone());
-    rvMesh.position.set(-0.8, -0.2, 0.6); // Anterior and Right
-    rvMesh.rotation.z = 0.2;
+    rvMesh.position.set(-0.7, -0.3, 0.5); 
+    rvMesh.rotation.z = 0.3;
+    rvMesh.rotation.y = 0.4;
     rvMesh.castShadow = true;
     rvMesh.userData = { name: 'RV' };
     heartGroup.add(rvMesh);
 
     // 3. LEFT ATRIUM (Posterior)
-    const laGeom = new THREE.SphereGeometry(0.8, 32, 32);
+    const laGeom = new THREE.SphereGeometry(0.75, 32, 32);
+    laGeom.scale(1.1, 0.9, 0.9);
     const laMesh = new THREE.Mesh(laGeom, muscleMat.clone());
-    laMesh.position.set(0.8, 1.0, -0.5);
+    laMesh.position.set(0.6, 1.1, -0.8);
     laMesh.userData = { name: 'LA' };
     heartGroup.add(laMesh);
 
     // 4. RIGHT ATRIUM (Right Superior)
-    const raGeom = new THREE.SphereGeometry(0.85, 32, 32);
+    const raGeom = new THREE.SphereGeometry(0.8, 32, 32);
+    raGeom.scale(0.9, 1.1, 0.9);
     const raMesh = new THREE.Mesh(raGeom, muscleMat.clone());
-    raMesh.position.set(-1.0, 0.8, 0.2);
+    raMesh.position.set(-0.9, 1.0, 0.1);
     raMesh.userData = { name: 'RA' };
     heartGroup.add(raMesh);
 
     // 5. AORTA (The Arch)
     const aortaCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0.2, 1.0, 0),
-      new THREE.Vector3(0.3, 2.2, 0),
-      new THREE.Vector3(-0.5, 2.5, -0.2), // Arching left/back
-      new THREE.Vector3(-0.8, 1.5, -0.5)  // Descending
+      new THREE.Vector3(0.1, 0.8, -0.1), // Aortic root (from LV)
+      new THREE.Vector3(0.2, 2.0, 0.1),  // Ascending
+      new THREE.Vector3(-0.4, 2.6, -0.3), // Arch
+      new THREE.Vector3(-0.7, 1.5, -0.8)  // Descending
     ]);
-    const aortaGeom = new THREE.TubeGeometry(aortaCurve, 20, 0.45, 16, false);
+    const aortaGeom = new THREE.TubeGeometry(aortaCurve, 32, 0.45, 16, false);
     const aortaMesh = new THREE.Mesh(aortaGeom, vesselMat);
     heartGroup.add(aortaMesh);
 
     // 6. PULMONARY ARTERY (Crossing Aorta)
     const pulmCurve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-0.6, 0.5, 0.8), // From RV
-      new THREE.Vector3(-0.2, 1.5, 0.3),
-      new THREE.Vector3(0.5, 1.8, 0.1)   // Branching right
+      new THREE.Vector3(-0.4, 0.6, 0.6), // Pulmonary root (from RV)
+      new THREE.Vector3(-0.1, 1.6, 0.4), // Main PA
+      new THREE.Vector3(0.7, 1.9, -0.1)  // Branching to lungs
     ]);
-    const pulmGeom = new THREE.TubeGeometry(pulmCurve, 20, 0.4, 16, false);
+    const pulmGeom = new THREE.TubeGeometry(pulmCurve, 32, 0.4, 16, false);
     const pulmMesh = new THREE.Mesh(pulmGeom, venousMat);
     heartGroup.add(pulmMesh);
+
+    // 7. SUPERIOR VENA CAVA (SVC)
+    const svcCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-0.9, 1.5, 0.1), // Entering RA
+      new THREE.Vector3(-1.0, 2.5, 0.2)
+    ]);
+    const svcGeom = new THREE.TubeGeometry(svcCurve, 16, 0.35, 16, false);
+    const svcMesh = new THREE.Mesh(svcGeom, venousMat);
+    heartGroup.add(svcMesh);
+
+    // 8. INFERIOR VENA CAVA (IVC)
+    const ivcCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-0.9, 0.2, 0.0), // Entering RA from below
+      new THREE.Vector3(-1.0, -1.0, -0.1)
+    ]);
+    const ivcGeom = new THREE.TubeGeometry(ivcCurve, 16, 0.35, 16, false);
+    const ivcMesh = new THREE.Mesh(ivcGeom, venousMat);
+    heartGroup.add(ivcMesh);
+
+    // 9. CORONARY ARTERIES (LAD)
+    const ladCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0.1, 0.8, 0.3), // Origin near aorta
+      new THREE.Vector3(-0.1, 0.2, 0.9), // Down the interventricular sulcus
+      new THREE.Vector3(0.0, -0.8, 0.9),
+      new THREE.Vector3(0.2, -1.6, 0.5)  // Towards apex
+    ]);
+    const ladGeom = new THREE.TubeGeometry(ladCurve, 32, 0.06, 8, false);
+    const ladMesh = new THREE.Mesh(ladGeom, vesselMat);
+    heartGroup.add(ladMesh);
+    
+    // 10. CORONARY ARTERIES (RCA)
+    const rcaCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-0.1, 0.8, 0.2), // Origin
+      new THREE.Vector3(-0.8, 0.4, 0.6), // Right AV groove
+      new THREE.Vector3(-1.1, -0.2, 0.2),
+      new THREE.Vector3(-0.6, -0.8, -0.4) // Posterior
+    ]);
+    const rcaGeom = new THREE.TubeGeometry(rcaCurve, 32, 0.06, 8, false);
+    const rcaMesh = new THREE.Mesh(rcaGeom, vesselMat);
+    heartGroup.add(rcaMesh);
 
     // --- PATHOLOGY VISUALIZATION (ISCHEMIA MAP) ---
     // Instead of lights, we tint the specific mesh material
@@ -253,6 +297,10 @@ const Heart3D: React.FC<Heart3DProps> = ({
       else if (pattern === 'vt' || pattern === 'vf') {
          ventRate = bpm;
          atriaRate = 0; // Hidden
+      }
+      else if (pattern === 'svt') {
+         ventRate = bpm;
+         atriaRate = bpm; // Fast 1:1 conduction
       }
 
       // 2. TIMING

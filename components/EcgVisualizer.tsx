@@ -170,6 +170,14 @@ const WaveformCanvas: React.FC<{ pattern: string, bpm: number }> = ({ pattern, b
         pushCurve(0, -12, 20); 
         pushLine(0, 10);
 
+      } else if (currentPattern === 'svt') {
+        // Narrow QRS, fast rate, no visible P waves (hidden in QRS/T)
+        pushLine(0, 8); // No P
+        beat.push(5); pushLine(-45, 6); beat.push(8); // Narrow QRS
+        pushLine(0, 5);
+        pushCurve(0, -10, 15); // T wave
+        pushLine(0, 8);
+
       } else if (currentPattern === 'afib') {
         // Irregular baseline
         pushLine(0, 15, true); 
@@ -243,7 +251,7 @@ const WaveformCanvas: React.FC<{ pattern: string, bpm: number }> = ({ pattern, b
       // CRITICAL COLORING
       if (['vt', 'vf', 'torsades', 'stemi', 'hyperkalemia', 'dewinter'].includes(pattern)) color = '#ef4444'; // Red
       // WARNING COLORING
-      if (['afib', 'avblock3', 'wpw', 'wellens', 'brugada', 'arvd', 'pericarditis'].includes(pattern)) color = '#fbbf24'; // Amber
+      if (['afib', 'svt', 'avblock3', 'wpw', 'wellens', 'brugada', 'arvd', 'pericarditis'].includes(pattern)) color = '#fbbf24'; // Amber
       
       ctx.strokeStyle = color;
       ctx.lineWidth = 2.5;

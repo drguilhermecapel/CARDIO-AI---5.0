@@ -200,11 +200,47 @@ class ECGFeatureExtractor:
             # ST Elevation/Depression
             # J-point and J+60ms
             if 'J_point' in points and points['J_point'] < len(median_beat):
-                amps['j_point_elev'] = median_beat[points['J_point']]
+                j_idx = points['J_point']
+                amps['j_point_elev'] = median_beat[j_idx]
                 
-                j_plus_60 = points['J_point'] + int(0.06 * self.fs)
+                j_plus_60 = j_idx + int(0.06 * self.fs)
+                j_plus_80 = j_idx + int(0.08 * self.fs)
+                
                 if j_plus_60 < len(median_beat):
                     amps['st_60_elev'] = median_beat[j_plus_60]
+                    
+                # ST Slope Analysis
+                if j_plus_80 < len(median_beat):
+                    # Slope between J and J+80
+                    y1 = median_beat[j_idx]
+                    y2 = median_beat[j_plus_80]
+                    slope = (y2 - y1) / (0.08) # mV/s
+                    
+                    if abs(slope) < 0.1:
+                        amps['st_slope'] = 'Horizontal'
+                    elif slope > 0.1:
+                        amps['st_slope'] = 'Upsloping'
+                    else:
+                        amps['st_slope'] = 'Downsloping'
+            
+            # T-Wave Morphology (Symmetry)
+            if 'T_peak' in points and 'T_offset' in points:
+                t_peak = points['T_peak']
+                t_off = points['T_offset']
+                # T onset is roughly J+80 or end of ST
+                t_on = points.get('J_point', r_idx + 40) + int(0.08 * self.fs)
+                
+                if t_on < t_peak < t_off and t_off < len(median_beat):
+                    # Check symmetry: Time from Onset to Peak vs Peak to Offset
+                    t_rise = t_peak - t_on
+                    t_fall = t_off - t_peak
+                    
+                    if t_rise > 0 and t_fall > 0:
+                        ratio = t_rise / t_fall
+                        if 0.8 <= ratio <= 1.2:
+                            amps['t_symmetry'] = 'Symmetric'
+                        else:
+                            amps['t_symmetry'] = 'Asymmetric'
             
             # Store Lead Features
             features['leads'][lead_name] = {

@@ -36,6 +36,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ records, onSelect, onClose })
                   <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Diagnosis</th>
                   <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Rate</th>
                   <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Urgency</th>
+                  <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Confidence</th>
                   <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Action</th>
                 </tr>
               </thead>
@@ -55,6 +56,17 @@ const HistoryView: React.FC<HistoryViewProps> = ({ records, onSelect, onClose })
                       }`}>
                         {rec.urgency}
                       </span>
+                    </td>
+                    <td className="p-4">
+                      {rec.confidenceLevel && (
+                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
+                          rec.confidenceLevel === 'High' ? 'bg-green-100 text-green-700' :
+                          rec.confidenceLevel === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {rec.confidenceLevel}
+                        </span>
+                      )}
                     </td>
                     <td className="p-4">
                       <button 

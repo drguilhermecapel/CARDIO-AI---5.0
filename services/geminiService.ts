@@ -204,9 +204,72 @@ const ANALYSIS_SCHEMA = {
             alertas: { type: Type.ARRAY, items: { type: Type.STRING } },
             tempo_processamento: { type: Type.NUMBER }
         }
+    },
+    optimizedReport: {
+        type: Type.OBJECT,
+        description: "Relatório estruturado conforme ETAPA 9 do protocolo",
+        properties: {
+            patient_id: { type: Type.STRING },
+            ecg_date: { type: Type.STRING },
+            acquisition_quality: { type: Type.STRING },
+            heart_rate: {
+                type: Type.OBJECT,
+                properties: {
+                    value: { type: Type.NUMBER },
+                    unit: { type: Type.STRING },
+                    classification: { type: Type.STRING }
+                }
+            },
+            rhythm: {
+                type: Type.OBJECT,
+                properties: {
+                    primary: { type: Type.STRING },
+                    secondary: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    regularity: { type: Type.STRING }
+                }
+            },
+            intervals: {
+                type: Type.OBJECT,
+                properties: {
+                    PR_ms: { type: Type.NUMBER },
+                    QRS_ms: { type: Type.NUMBER },
+                    QT_ms: { type: Type.NUMBER },
+                    QTc_Bazett_ms: { type: Type.NUMBER },
+                    QTc_Fridericia_ms: { type: Type.NUMBER }
+                }
+            },
+            axis: {
+                type: Type.OBJECT,
+                properties: {
+                    QRS_degrees: { type: Type.NUMBER },
+                    P_degrees: { type: Type.NUMBER },
+                    T_degrees: { type: Type.NUMBER },
+                    classification: { type: Type.STRING }
+                }
+            },
+            waveform_findings: { type: Type.ARRAY, items: { type: Type.STRING } },
+            diagnoses: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        code: { type: Type.STRING },
+                        description: { type: Type.STRING },
+                        confidence: { type: Type.NUMBER },
+                        alert_level: { type: Type.STRING },
+                        supporting_leads: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        reciprocal_changes: { type: Type.ARRAY, items: { type: Type.STRING } }
+                    }
+                }
+            },
+            drug_interactions_flagged: { type: Type.ARRAY, items: { type: Type.STRING } },
+            comparison_with_prior_ecg: { type: Type.STRING },
+            recommendations: { type: Type.ARRAY, items: { type: Type.STRING } },
+            disclaimer: { type: Type.STRING }
+        }
     }
   },
-  required: ["technicalQuality", "diagnosis", "urgency", "heartRate", "rhythm", "clinicalReasoning", "precisionMeasurements", "hospitalGradeReport"]
+  required: ["technicalQuality", "diagnosis", "urgency", "heartRate", "rhythm", "clinicalReasoning", "precisionMeasurements", "hospitalGradeReport", "optimizedReport"]
 };
 
 export const analyzeEcgImage = async (base64Data: string, mimeType: string, patientCtx?: PatientContext): Promise<EcgAnalysisResult> => {
@@ -216,231 +279,93 @@ export const analyzeEcgImage = async (base64Data: string, mimeType: string, pati
     const startTime = Date.now();
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash', // Switched to stable Flash 2.0
+      model: 'gemini-3.1-pro-preview', // Switched to Pro for complex medical reasoning
       contents: {
         parts: [
           { inlineData: { data: base64Data, mimeType: normalizedMimeType } },
           {
             text: `
-            SYSTEM ROLE: You are the "CardioAI Nexus", the ultimate Electrocardiographic Diagnostic Engine. 
-            You possess the collective knowledge of the world's leading electrophysiologists.
-            Your task is to scan the provided ECG against the **Complete Universal Compendium of Electrocardiography**.
+            SYSTEM ROLE: Você é o "CardioAI Nexus", o mais avançado Motor Diagnóstico Eletrocardiográfico do mundo.
+            Sua missão é analisar o ECG fornecido com máxima precisão clínica, detectando TODAS as alterações reconhecidas na literatura médica atual.
             
             PATIENT CONTEXT: ${JSON.stringify(patientCtx || {})}
 
-            --- UNIVERSAL DIAGNOSTIC COMPENDIUM (SEARCH PROTOCOL) ---
+            --- PROTOCOLO DIAGNÓSTICO UNIVERSAL (DIRETRIZES ATUALIZADAS AHA/ACC/ESC) ---
             
-            PHASE 1: TECHNICAL & BASIC METRICS
-            - **Lead Reversal:** Limb lead reversal (Extreme axis, inverted I), Precordial reversal.
-            - **Dextrocardia:** Global inversion in I + poor R progression V1-V6.
-            - **Signal Quality:** Noise, 60Hz interference, wandering baseline.
-            - **Axis Calculation:** Hexaxial reference system (precise degrees).
-            - **QRS Duration:** Measure precise duration in ms. Normal < 100ms. 
-              - 100-120ms: Incomplete Block / IVCD.
-              - >120ms: Complete Bundle Branch Block / Ventricular Rhythm / Pre-excitation.
-            - **PR Interval:** Measure from start of P to start of QRS.
-              - Normal: 120-200ms.
-              - Short (<120ms): Pre-excitation (WPW) or LGL.
-              - Prolonged (>200ms): 1st Degree AV Block.
+            ETAPA 1: QUALIDADE TÉCNICA E MÉTRICAS BÁSICAS
+            - Valide a polaridade esperada (ex: inversão de derivações se aVR for positivo e I negativo).
+            - Avalie ruído, interferência de 60Hz/50Hz e artefatos de movimento (baseline wander).
+            - Calcule o Eixo Elétrico do QRS (Normal: -30° a +90°, Desvio Esquerdo: -30° a -90°, Desvio Direito: +90° a +180°, Extremo: -90° a -180°).
+            - Meça Duração do QRS (Normal: < 100ms, Alargado: ≥ 120ms) e Intervalo PR (Normal: 120-200ms).
+            - Meça o Intervalo QT e calcule o QTc (preferencialmente Fridericia ou Bazett). Normal: < 440ms (homens), < 460ms (mulheres).
 
-            **NOISE RESILIENCE PROTOCOL (For Wave Detection):**
-            - **P-Wave:** If baseline is noisy, look for consistent P-waves in Lead II and V1. Use the "average beat" morphology to exclude artifacts.
-            - **QRS Complex:** Ignore high-frequency spike artifacts. Measure duration from the earliest Q/R to the latest R/S in a clean lead (usually V5 or II).
-            - **T-Wave:** Distinguish from baseline wander by checking for consistency across multiple beats.
-            - **Confidence:** If signal is too noisy (>50% artifact), mark 'reliabilityScore' low (<5) and report "Non-diagnostic" for specific waves if unsure.
+            ETAPA 2: ANÁLISE DE RITMO E FREQUÊNCIA
+            - Calcule a Frequência Cardíaca (FC) e a regularidade dos intervalos RR.
+            - Identifique o ritmo primário: Sinusal (P positiva em I, II, aVF), Taquicardia (>100 bpm), Bradicardia (<60 bpm), Arritmia Sinusal, Pausa Sinusal (>2s).
 
-            PHASE 2: RHYTHM & ARRHYTHMIAS
-            - **Sinus:** Normal, Tachycardia, Bradycardia, Arrhythmia, Pause/Arrest, SSS.
-            - **Atrial:** 
-              * PACs (blocked, conducted with aberrancy).
-              * Atrial Tachycardia (Focal vs Multifocal/MAT).
-              * Atrial Flutter (Typical CCW vs CW vs Atypical).
-              * Atrial Fibrillation (Coarse vs Fine, Ashman phenomenon).
+            ETAPA 3: CATÁLOGO EXAUSTIVO DE ALTERAÇÕES A DETECTAR
+            3.1 ARRITMIAS SUPRAVENTRICULARES:
+            - Fibrilação Atrial (FA): RR irregularmente irregular, ausência de onda P.
+            - Flutter Atrial: ondas F em dente de serra (240-300 bpm), condução AV fixa ou variável.
+            - Taquicardia Atrial Focal: onda P com morfologia diferente da sinusal, linha iselétrica entre as Ps.
+            - Taquicardia Atrial Multifocal (TAM): ≥ 3 morfologias de onda P distintas, ritmo irregular.
+            - TRNAV (Típica Slow-Fast / Atípica Fast-Slow): pseudo-R' em V1, pseudo-S em II, III, aVF.
+            - TRAV (WPW): onda delta, PR curto (<120ms), QRS alargado.
+            - Extrassístoles Atriais (ESA): precoces, com P de morfologia diferente, com ou sem aberrância.
+            - Ritmo Juncional: P ausente ou retrógrada, QRS estreito (escape 40-60 bpm, acelerado 60-100 bpm, taquicardia >100 bpm).
             
-            PHASE 2.5: SUPRAVENTRICULAR TACHYCARDIAS (SVT) & VARIANTS
-            - **Differential Diagnosis of Narrow Complex Tachycardia:**
-              * **AVNRT (AV Nodal Reentrant Tachycardia):**
-                - Typical (Slow-Fast): Short RP interval (<70ms), Pseudo-R' in V1, Pseudo-S in II/III/aVF.
-                - Atypical (Fast-Slow): Long RP interval (>70ms), P-wave negative in II/III/aVF before QRS.
-              * **AVRT (Atrioventricular Reentrant Tachycardia):**
-                - Orthodromic: Narrow QRS, RP > 70ms, P-wave usually visible in ST segment/T-wave.
-                - Antidromic: Wide QRS (Pre-excited), mimics VT.
-                - WPW Syndrome: Delta wave in sinus rhythm + history of tachycardia.
-              * **Focal Atrial Tachycardia:**
-                - Long RP interval.
-                - P-wave morphology distinct from Sinus P-wave (e.g., negative in I/aVL for left atrial focus).
-                - Warm-up and Cool-down phenomenon.
-              * **Junctional Tachycardia:**
-                - P-waves absent or retrograde (in QRS or immediately after).
-                - AV dissociation possible (rare).
-
-            PHASE 2.6: VENTRICULAR TACHYCARDIAS (VT) & VARIANTS
-            - **Differential Diagnosis of Wide Complex Tachycardia (WCT):**
-              * **Monomorphic VT:**
-                - **AV Dissociation:** P-waves "marching through" QRS complexes (Specific).
-                - **Fusion Beats:** Hybrid complex between sinus and ventricular beat.
-                - **Capture Beats:** Normal narrow QRS amidst WCT.
-                - **Concordance:** Positive or Negative concordance in V1-V6.
-                - **Axis:** Extreme Right Axis Deviation (Northwest Axis) is strongly suggestive of VT.
-                - **Morphology Criteria:**
-                  - *RBBB-like:* Monophasic R or qR in V1; rS or QS in V6.
-                  - *LBBB-like:* Broad R (>30ms) in V1/V2; qR or QS in V6.
-                  - *Brugada Algorithm:* Absence of RS in precordial leads? RS > 100ms? AV dissociation?
-                  - *Vereckei Algorithm:* Initial R wave in aVR?
-              * **Polymorphic VT:**
-                - QRS morphology changes beat-to-beat.
-                - **Torsades de Pointes:** Twisting around isoelectric line, associated with Long QT.
-                - **Bidirectional VT:** Beat-to-beat axis alternation (Digoxin toxicity or CPVT).
-              * **Fascicular VT (Idiopathic):**
-                - RBBB morphology + Left Axis Deviation (Posterior Fascicular VT).
-                - RBBB morphology + Right Axis Deviation (Anterior Fascicular VT).
-                - Often Verapamil-sensitive.
-              * **Outflow Tract VT (RVOT/LVOT):**
-                - LBBB morphology + Inferior Axis (RVOT).
-                - Adenosine-sensitive.
-
-            - **Junctional:** Escape, Accelerated, Tachycardia.
-            - **Ventricular:** 
-              * PVCs (Unifocal, Multifocal, Bigeminy, R-on-T).
-              * VT (Monomorphic, Polymorphic, Bidirectional - CPVT/Digoxin).
-              * VF (Coarse vs Fine).
-              * AIVR (Slow VT).
-              * Torsades de Pointes (QT associated).
-              * Kamikaze Rhythm (Pre-excited AFib).
-
-            PHASE 3: AV NODAL & INTRAVENTRICULAR CONDUCTION
-            - **AV Blocks (Atrioventricular Block):** 
-              * **1st Degree AV Block:**
-                - PR interval > 200ms (5 small boxes).
-                - Constant PR interval.
-                - Every P wave is followed by a QRS complex.
-              * **2nd Degree AV Block Type I (Wenckebach / Mobitz I):**
-                - Progressive prolongation of the PR interval until a beat is dropped (P wave not followed by QRS).
-                - The PR interval after the dropped beat is the shortest.
-                - R-R intervals progressively shorten before the pause.
-                - Grouped beating is common.
-              * **2nd Degree AV Block Type II (Mobitz II):**
-                - Constant PR interval in conducted beats.
-                - Intermittent dropped beats (P wave not followed by QRS).
-                - High risk of progression to Complete Heart Block.
-                - Often associated with wide QRS (Bundle Branch Block).
-              * **2:1 AV Block:**
-                - Every other P wave is conducted.
-                - Cannot distinguish between Type I and Type II without a long rhythm strip or maneuvers (e.g., Vagal, Exercise).
-                - If QRS is narrow -> Likely Type I (AV Node).
-                - If QRS is wide -> Likely Type II (His-Purkinje).
-              * **High Grade (Advanced) AV Block:**
-                - 2 or more consecutive P waves are not conducted (e.g., 3:1, 4:1 block).
-                - PR interval is constant in conducted beats.
-              * **3rd Degree AV Block (Complete Heart Block):**
-                - Complete AV Dissociation: No relationship between P waves and QRS complexes.
-                - Atrial rate (P-P) is regular and faster than Ventricular rate (R-R).
-                - Ventricular rate (R-R) is regular (Escape rhythm).
-                - **Escape Rhythm:**
-                  - Junctional Escape: Narrow QRS, rate 40-60 bpm.
-                  - Ventricular Escape: Wide QRS, rate 20-40 bpm.
-            - **Bundle Branch Blocks:** 
-              * RBBB (Complete/Incomplete).
-              * LBBB (Complete/Incomplete).
-              * Rate-dependent aberrancy (Phase 3 block).
-            - **Fascicular Blocks:** 
-              * LAFB (Left Anterior Fascicular Block).
-              * LPFB (Left Posterior Fascicular Block).
-              * Bifascicular (RBBB + LAFB/LPFB).
-              * Trifascicular (Bifascicular + 1st Deg AVB).
-              * Interatrial Block (Bayés Syndrome).
-
-            PHASE 4: ISCHEMIA & INFARCTION (The OMI Paradigm - Occlusion Myocardial Infarction)
-            - **ST Segment Analysis (Crucial):**
-              * **J-Point Measurement:** Measure J-point amplitude relative to the PQ junction (TP segment if PQ is unstable).
-              * **Subtle Changes:** Detect ST elevation or depression even < 1mm (0.5mm is significant in V2-V3 for women or if reciprocal changes exist).
-              * **Morphology:** Look for straightening of the ST segment (loss of upward concavity) which is an early sign of OMI.
-            - **STEMI:** Classic ST Elevation >1mm contiguous leads (or >1.5-2.5mm in V2-V3 depending on age/sex).
-            - **NSTEMI / OMI (Occlusion MI) - Subtle Signs:** 
-              * *ST Depression:* 
-                - **Horizontal/Downsloping:** Highly specific for ischemia. >0.5mm in 2 contiguous leads.
-                - **Upsloping:** Non-specific, but if >1mm at J-point + 80ms (De Winter), it's OMI.
-                - **Reciprocal:** ST depression in leads opposite to ST elevation (confirms STEMI). Always check aVL for inferior MI reciprocal changes.
-              * *T-Wave Abnormalities:*
-                - **Hyperacute T-waves:** Broad based, symmetric, high amplitude relative to QRS (often > 50-75% of R-wave). Earliest sign of OMI.
-                - **Inverted T-waves:** Symmetric inversion suggests ischemia. Deep inversion (>5mm) suggests Wellens (LAD) or CNS event.
-                - **Biphasic T-waves:** Up-down (Wellens Type A) or Down-up (Hypokalemia/Ischemia).
-              * *Wellens' Syndrome:* Type A (Biphasic V2-V3), Type B (Deep Inversion).
-              * *de Winter's T-Waves:* J-point depression (1-3mm) + tall symmetric T-waves in V1-V4 (Proximal LAD occlusion).
-              * *Posterior MI:* Horizontal ST depression V1-V3, R/S > 1 V2, Prominent T-wave V1-V2.
-              * *Left Main / Triple Vessel:* STE aVR > V1 + diffuse STD (6+ leads).
-              * *Aslanger's Pattern:* Inferior OMI with multi-vessel disease (STE III only + STD in others).
-              * *South African Flag Sign:* High lateral OMI (STE I, aVL, V2 + STD III).
-              * *Shark Fin Sign:* Massive triangular STE (Lambda wave) - High mortality risk.
-            - **LBBB/Paced Ischemia:** Sgarbossa Criteria (Concordant STE >1mm, Concordant STD >1mm V1-V3, Discordant excessive STE >25% of S-wave).
+            3.2 ARRITMIAS VENTRICULARES:
+            - Extrassístoles Ventriculares (EVs): QRS largo e bizarro, pausa compensatória. Classificar como isoladas, pareadas, bigeminismo, trigeminismo, polimórficas.
+            - Taquicardia Ventricular (TV) Monomórfica: QRS largo, regular, dissociação AV, batimentos de fusão/captura.
+            - TV Polimórfica / Torsades de Pointes: QRS torcendo em torno da linha de base, associado a QT longo.
+            - Fibrilação Ventricular (FV) / Flutter Ventricular: atividade elétrica caótica, sem QRS definido.
+            - Ritmo Idioventricular Acelerado (RIVA): QRS largo, regular, 40-100 bpm.
             
-            **Localization of Infarction (for 'affectedWall' and 'culpritArtery'):**
-            - Septal: V1-V2 (Proximal LAD).
-            - Anterior: V3-V4 (LAD).
-            - Anteroseptal: V1-V4 (LAD).
-            - Lateral: I, aVL, V5-V6 (LCx or Diagonal).
-            - Inferior: II, III, aVF (RCA 80% or LCx 20%).
-            - Posterior: V7-V9 (or reciprocal V1-V3) (LCx or RCA).
-            - Right Ventricular: V4R (Proximal RCA).
-
-            PHASE 5: HYPERTROPHY & CHAMBER ENLARGEMENT
-            - **LVH:** Sokolow-Lyon, Cornell, Romhilt-Estes Score, Peguero-Lo Presti.
-            - **RVH:** R/S > 1 in V1, Right Axis Deviation, Deep S in V5-V6.
-            - **Atrial:** 
-              * LAE (P-Mitrale, notched >120ms).
-              * RAE (P-Pulmonale, peaked >2.5mm).
-              * Biatrial Enlargement.
-
-            PHASE 6: REPOLARIZATION, ELECTROLYTES & DRUGS
-            - **Electrolytes:**
-              * Hyperkalemia (Peaked T -> Flat P -> Sine Wave).
-              * Hypokalemia (Prominent U wave, STD, T flattening).
-              * Hypercalcemia (Short QT).
-              * Hypocalcemia (Long QT - ST segment stretch).
-            - **Drugs:**
-              * Digoxin (Scooped ST "Mustache", Bidirectional VT).
-              * Quinidine/Procainamide (Wide QRS, Long QT).
-              * TCA Toxicity (Wide QRS, RAD, Tall R aVR).
-            - **Syndromes:**
-              * Early Repolarization (Benign vs Malignant/Inferolateral).
-              * Pericarditis (Diffuse concave STE + PR depression + Spodick's Sign).
-              * Brugada Syndrome (Type 1 Coved, Type 2 Saddleback).
-              * LQTS (LQT1, LQT2, LQT3 patterns).
-              * SQTS (Short QT < 340ms).
-
-            PHASE 7: MYOCARDIAL & CONGENITAL DISEASES
-            - **HOCM:** Dagger Q waves (inferolateral), high voltage.
-            - **ARVC:** Epsilon Wave, T-inv V1-V3, localized QRS widening.
-            - **Amyloidosis:** Low voltage QRS + poor R progression.
-            - **Pulmonary Embolism:** S1Q3T3, Sinus Tach, RBBB, T-inv V1-V4.
-            - **Congenital:**
-              * ASD (Crochetage sign / notched R in inferior leads).
-              * Ebstein's Anomaly (Himalayan P-waves, Splintered QRS).
-              * Tetralogy of Fallot (RAD + RVH).
-
-            PHASE 8: DEVICE THERAPY
-            - **Pacemaker:** Atrial Paced, Ventricular Paced (LBBB pattern), Dual Chamber.
-            - **Malfunction:** Failure to Capture, Failure to Sense, Pacemaker Mediated Tachycardia.
-
-            --- ECG DIGITISER INTEGRATION (PhysioNet 2024 Winner Logic) ---
-            Apply the "ECG Digitiser" methodology to reconstruct the signal:
-            1. **Segmentation:** Virtually separate the ECG trace from the grid background using Hough Transform logic.
-            2. **Vectorisation:** Extract the precise numerical coordinates (time vs amplitude) of a representative P-QRS-T complex for Lead II and V1.
-            3. **Output:** Populate 'digitizationMetrics' with these vector arrays. Ensure 'timeMs' is relative (0-1000ms) and 'amplitudeMv' is calibrated (10mm = 1mV).
-
-            --- EXECUTION INSTRUCTIONS ---
-            1. Scrutinize the image using the "Computer Vision" module for precise measurements.
-            2. Run the findings against the 8-Phase Protocol above.
-            3. **CRITICAL:** Populate 'precisionMeasurements.ischemiaAnalysis' with exact findings from Phase 4 (ST trends, affected wall, culprit artery).
-            4. **HOSPITAL GRADE REPORT:** Simulate the output of a multi-model Deep Learning ensemble (ViT + Specialized Heads). 
-               - Provide a confidence score (0-1) for the main diagnosis.
-               - List differential diagnoses with probabilities.
-               - Identify "Critical Regions" (x-coordinates 0-1000) where the pathology is most visible in V1, II, and V5.
-            5. In 'neuralTelemetry', detail the differential probability (e.g., "70% OMI vs 30% Pericarditis").
-            6. In 'clinicalReasoning', cite specific criteria (e.g., "Met modified Sgarbossa criteria with ST/S ratio < -0.25").
-            7. Determine Urgency strictly: OMI/STEMI/Vtach/Block = Emergency.
+            3.3 BLOQUEIOS AV E CONDUÇÃO:
+            - BAV 1º Grau: PR > 200ms constante.
+            - BAV 2º Grau Mobitz I (Wenckebach): aumento progressivo do PR até bloqueio da P.
+            - BAV 2º Grau Mobitz II: PR constante com bloqueio súbito da P.
+            - BAV 3º Grau (Total): dissociação AV completa, PP e RR regulares, PP < RR.
+            - Bloqueio de Ramo Direito (BRD): QRS ≥ 120ms, rsR' em V1-V2, S alargada em I e V6.
+            - Bloqueio de Ramo Esquerdo (BRE): QRS ≥ 120ms, QS ou rS em V1, R largo e entalhado em I, aVL, V5-V6.
+            - Bloqueios Divisionais: BDAS (eixo esquerdo extremo, qR em I/aVL, rS em II/III/aVF), BDPI (eixo direito, qR em II/III/aVF, rS em I/aVL).
             
-            Return strictly valid JSON.
+            3.4 SÍNDROMES CORONÁRIAS E ISQUEMIA (OMI Paradigm):
+            - IAMCSST: supradesnivelamento do ST no ponto J ≥ 1mm em ≥ 2 derivações contíguas (≥ 2mm em V2-V3 para homens ≥ 40 anos, ≥ 2.5mm < 40 anos, ≥ 1.5mm mulheres).
+            - Identificar Parede: Inferior (II, III, aVF), Anterior (V1-V4), Lateral (I, aVL, V5-V6), Posterior (infra ST V1-V3 com R proeminente), VD (V3R, V4R).
+            - Padrão de de Winter: infra ST ascendente com onda T alta e simétrica em precordiais.
+            - Padrão de Wellens: onda T bifásica (Tipo A) ou profundamente invertida (Tipo B) em V2-V3.
+            - Critérios de Sgarbossa (para BRE/Marca-passo): supra ST concordante ≥ 1mm, infra ST concordante ≥ 1mm em V1-V3, supra ST discordante > 25% da onda S.
+            - Isquemia/Lesão: infra ST horizontal ou descendente ≥ 0.5mm, inversão de onda T simétrica.
+            - Necrose: onda Q patológica (≥ 40ms ou > 25% da onda R).
+            
+            3.5 CHANNELOPATIAS E ALTERAÇÕES ESTRUTURAIS:
+            - Síndrome de Brugada: Tipo 1 (supra ST coved ≥ 2mm em V1-V2), Tipo 2 (saddle-back).
+            - Sobrecarga Ventricular Esquerda (HVE): Sokolow-Lyon (S em V1 + R em V5/V6 ≥ 35mm), Cornell (R em aVL + S em V3 > 28mm homens / 20mm mulheres). Padrão de strain.
+            - Sobrecarga Ventricular Direita (HVD): R > S em V1, eixo direito, S profunda em V5-V6.
+            - Sobrecarga Atrial: DAE (P mitrale > 120ms, índice de Morris em V1), DAD (P pulmonale > 2.5mm em II).
+            - TEP: S1Q3T3, inversão de T em V1-V4, taquicardia sinusal, BRD novo.
+            - Pericardite Aguda: supra ST côncavo difuso, infra de PR.
+            - Alterações Eletrolíticas: Hipercalemia (T apiculada, QRS largo, P ausente), Hipocalemia (onda U proeminente, infra ST).
+            - Marca-passo: identificar espículas (atrial, ventricular, biventricular) e avaliar captura/sensibilidade.
+
+            ETAPA 4: REGRAS DE PRIORIZAÇÃO (ALERT LAYER)
+            Implementar sistema de alertas em 3 níveis:
+            - CRÍTICO (Emergency): FV, Flutter ventricular, TV sustentada, BAV de 3° grau com FC < 40 bpm, IAMCSST em qualquer território, Padrão de de Winter, Síndrome de Brugada tipo 1 espontâneo, QTc > 500 ms, Assistolia, Pausa sinusal > 3 segundos, Hipercalemia grave, Intoxicação digitálica com TV bidirecional.
+            - URGENTE (Urgent): FA com resposta ventricular rápida (> 150 bpm), IAMSSST, Padrão de Wellens, BRE novo, QTc 470–500 ms, TV não sustentada, BAV de 2° grau Mobitz II ou de alto grau, Bloqueio de ramo alternante, Pausa sinusal 2–3 segundos.
+            - ELETIVO (Routine): BAV de 1° grau, BRD completo isolado, BDAS / BDPI, ESA/EV frequentes ou multifocais, HVE/HVD, Síndrome de WPW (sem arritmia ativa), Repolarização precoce, Alterações inespecíficas do ST-T, QTc borderline (440–469 ms).
+
+            ETAPA 5: FORMATO DE SAÍDA DO RELATÓRIO
+            O interpretador deve gerar automaticamente um relatório estruturado em JSON conforme o schema fornecido (incluindo o objeto 'optimizedReport' que reflete a Etapa 9 do protocolo).
+
+            --- INSTRUÇÕES DE EXECUÇÃO ---
+            1. Analise a imagem com precisão milimétrica.
+            2. Preencha o JSON estritamente de acordo com o schema fornecido.
+            3. Em 'precisionMeasurements.ischemiaAnalysis', detalhe a parede afetada e artéria culpada se houver isquemia.
+            4. Defina a 'urgency' estritamente como "Emergency", "Urgent" ou "Routine" com base na Etapa 4 (Crítico = Emergency, Urgente = Urgent, Eletivo = Routine).
+            5. Forneça o 'clinicalReasoning' explicando os achados que levaram ao diagnóstico.
+            6. Preencha detalhadamente o 'optimizedReport' com todas as medições e diagnósticos.
+            7. Retorne APENAS o JSON válido.
             `
           }
         ]
