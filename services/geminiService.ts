@@ -273,159 +273,194 @@ const ANALYSIS_SCHEMA = {
 };
 
 export const analyzeEcgImage = async (base64Data: string, mimeType: string, patientCtx?: PatientContext): Promise<EcgAnalysisResult> => {
-  try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const normalizedMimeType = mimeType === 'image/jpg' ? 'image/jpeg' : mimeType;
-    const startTime = Date.now();
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const normalizedMimeType = mimeType === 'image/jpg' ? 'image/jpeg' : mimeType;
+  const startTime = Date.now();
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-pro-preview', // Switched to Pro for complex medical reasoning
-      contents: {
-        parts: [
-          { inlineData: { data: base64Data, mimeType: normalizedMimeType } },
-          {
-            text: `
-            SYSTEM ROLE: Você é o "CardioAI Nexus", o mais avançado Motor Diagnóstico Eletrocardiográfico do mundo.
-            Sua missão é analisar o ECG fornecido com máxima precisão clínica, detectando TODAS as alterações reconhecidas na literatura médica atual.
-            
-            PATIENT CONTEXT: ${JSON.stringify(patientCtx || {})}
+  const maxRetries = 3;
+  let attempt = 0;
+  let lastError: any;
 
-            --- PROTOCOLO DIAGNÓSTICO UNIVERSAL (DIRETRIZES ATUALIZADAS AHA/ACC/ESC) ---
-            
-            ETAPA 1: QUALIDADE TÉCNICA E MÉTRICAS BÁSICAS
-            - Valide a polaridade esperada (ex: inversão de derivações se aVR for positivo e I negativo).
-            - Avalie ruído, interferência de 60Hz/50Hz e artefatos de movimento (baseline wander).
-            - Calcule o Eixo Elétrico do QRS (Normal: -30° a +90°, Desvio Esquerdo: -30° a -90°, Desvio Direito: +90° a +180°, Extremo: -90° a -180°).
-            - Meça Duração do QRS (Normal: < 100ms, Alargado: ≥ 120ms) e Intervalo PR (Normal: 120-200ms).
-            - Meça o Intervalo QT e calcule o QTc (preferencialmente Fridericia ou Bazett). Normal: < 440ms (homens), < 460ms (mulheres).
+  while (attempt < maxRetries) {
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-pro-preview', // Switched to Pro for complex medical reasoning
+        contents: {
+          parts: [
+            { inlineData: { data: base64Data, mimeType: normalizedMimeType } },
+            {
+              text: `
+              SYSTEM ROLE: Você é o "CardioAI Nexus", o mais avançado Motor Diagnóstico Eletrocardiográfico do mundo.
+              Sua missão é analisar o ECG fornecido com máxima precisão clínica, detectando TODAS as alterações reconhecidas na literatura médica atual.
+              
+              PATIENT CONTEXT: ${JSON.stringify(patientCtx || {})}
 
-            ETAPA 2: ANÁLISE DE RITMO E FREQUÊNCIA
-            - Calcule a Frequência Cardíaca (FC) e a regularidade dos intervalos RR.
-            - Identifique o ritmo primário: Sinusal (P positiva em I, II, aVF), Taquicardia (>100 bpm), Bradicardia (<60 bpm), Arritmia Sinusal, Pausa Sinusal (>2s).
+              --- PROTOCOLO DIAGNÓSTICO UNIVERSAL (DIRETRIZES ATUALIZADAS AHA/ACC/ESC) ---
+              
+              ETAPA 1: QUALIDADE TÉCNICA E MÉTRICAS BÁSICAS
+              - Valide a polaridade esperada (ex: inversão de derivações se aVR for positivo e I negativo).
+              - Avalie ruído, interferência de 60Hz/50Hz e artefatos de movimento (baseline wander).
+              - Calcule o Eixo Elétrico do QRS (Normal: -30° a +90°, Desvio Esquerdo: -30° a -90°, Desvio Direito: +90° a +180°, Extremo: -90° a -180°).
+              - Meça Duração do QRS (Normal: < 100ms, Alargado: ≥ 120ms) e Intervalo PR (Normal: 120-200ms).
+              - Meça o Intervalo QT e calcule o QTc (preferencialmente Fridericia ou Bazett). Normal: < 440ms (homens), < 460ms (mulheres).
 
-            ETAPA 3: CATÁLOGO EXAUSTIVO DE ALTERAÇÕES A DETECTAR
-            3.1 ARRITMIAS SUPRAVENTRICULARES:
-            - Fibrilação Atrial (FA): RR irregularmente irregular, ausência de onda P.
-            - Flutter Atrial: ondas F em dente de serra (240-300 bpm), condução AV fixa ou variável.
-            - Taquicardia Atrial Focal: onda P com morfologia diferente da sinusal, linha iselétrica entre as Ps.
-            - Taquicardia Atrial Multifocal (TAM): ≥ 3 morfologias de onda P distintas, ritmo irregular.
-            - TRNAV (Típica Slow-Fast / Atípica Fast-Slow): pseudo-R' em V1, pseudo-S em II, III, aVF.
-            - TRAV (WPW): onda delta, PR curto (<120ms), QRS alargado.
-            - Extrassístoles Atriais (ESA): precoces, com P de morfologia diferente, com ou sem aberrância.
-            - Ritmo Juncional: P ausente ou retrógrada, QRS estreito (escape 40-60 bpm, acelerado 60-100 bpm, taquicardia >100 bpm).
-            
-            3.2 ARRITMIAS VENTRICULARES:
-            - Extrassístoles Ventriculares (EVs): QRS largo e bizarro, pausa compensatória. Classificar como isoladas, pareadas, bigeminismo, trigeminismo, polimórficas.
-            - Taquicardia Ventricular (TV) Monomórfica: QRS largo, regular, dissociação AV, batimentos de fusão/captura.
-            - TV Polimórfica / Torsades de Pointes: QRS torcendo em torno da linha de base, associado a QT longo.
-            - Fibrilação Ventricular (FV) / Flutter Ventricular: atividade elétrica caótica, sem QRS definido.
-            - Ritmo Idioventricular Acelerado (RIVA): QRS largo, regular, 40-100 bpm.
-            
-            3.3 BLOQUEIOS AV E CONDUÇÃO:
-            - BAV 1º Grau: PR > 200ms constante.
-            - BAV 2º Grau Mobitz I (Wenckebach): aumento progressivo do PR até bloqueio da P.
-            - BAV 2º Grau Mobitz II: PR constante com bloqueio súbito da P.
-            - BAV 3º Grau (Total): dissociação AV completa, PP e RR regulares, PP < RR.
-            - Bloqueio de Ramo Direito (BRD): QRS ≥ 120ms, rsR' em V1-V2, S alargada em I e V6.
-            - Bloqueio de Ramo Esquerdo (BRE): QRS ≥ 120ms, QS ou rS em V1, R largo e entalhado em I, aVL, V5-V6.
-            - Bloqueios Divisionais: BDAS (eixo esquerdo extremo, qR em I/aVL, rS em II/III/aVF), BDPI (eixo direito, qR em II/III/aVF, rS em I/aVL).
-            
-            3.4 SÍNDROMES CORONÁRIAS E ISQUEMIA (OMI Paradigm):
-            - IAMCSST: supradesnivelamento do ST no ponto J ≥ 1mm em ≥ 2 derivações contíguas (≥ 2mm em V2-V3 para homens ≥ 40 anos, ≥ 2.5mm < 40 anos, ≥ 1.5mm mulheres).
-            - Identificar Parede: Inferior (II, III, aVF), Anterior (V1-V4), Lateral (I, aVL, V5-V6), Posterior (infra ST V1-V3 com R proeminente), VD (V3R, V4R).
-            - Padrão de de Winter: infra ST ascendente com onda T alta e simétrica em precordiais.
-            - Padrão de Wellens: onda T bifásica (Tipo A) ou profundamente invertida (Tipo B) em V2-V3.
-            - Critérios de Sgarbossa (para BRE/Marca-passo): supra ST concordante ≥ 1mm, infra ST concordante ≥ 1mm em V1-V3, supra ST discordante > 25% da onda S.
-            - Isquemia/Lesão: infra ST horizontal ou descendente ≥ 0.5mm, inversão de onda T simétrica.
-            - Necrose: onda Q patológica (≥ 40ms ou > 25% da onda R).
-            
-            3.5 CHANNELOPATIAS E ALTERAÇÕES ESTRUTURAIS:
-            - Síndrome de Brugada: Tipo 1 (supra ST coved ≥ 2mm em V1-V2), Tipo 2 (saddle-back).
-            - Sobrecarga Ventricular Esquerda (HVE): Sokolow-Lyon (S em V1 + R em V5/V6 ≥ 35mm), Cornell (R em aVL + S em V3 > 28mm homens / 20mm mulheres). Padrão de strain.
-            - Sobrecarga Ventricular Direita (HVD): R > S em V1, eixo direito, S profunda em V5-V6.
-            - Sobrecarga Atrial: DAE (P mitrale > 120ms, índice de Morris em V1), DAD (P pulmonale > 2.5mm em II).
-            - TEP: S1Q3T3, inversão de T em V1-V4, taquicardia sinusal, BRD novo.
-            - Pericardite Aguda: supra ST côncavo difuso, infra de PR.
-            - Alterações Eletrolíticas: Hipercalemia (T apiculada, QRS largo, P ausente), Hipocalemia (onda U proeminente, infra ST).
-            - Marca-passo: identificar espículas (atrial, ventricular, biventricular) e avaliar captura/sensibilidade.
+              ETAPA 2: ANÁLISE DE RITMO E FREQUÊNCIA
+              - Calcule a Frequência Cardíaca (FC) e a regularidade dos intervalos RR.
+              - Identifique o ritmo primário: Sinusal (P positiva em I, II, aVF), Taquicardia (>100 bpm), Bradicardia (<60 bpm), Arritmia Sinusal, Pausa Sinusal (>2s).
 
-            ETAPA 4: REGRAS DE PRIORIZAÇÃO (ALERT LAYER)
-            Implementar sistema de alertas em 3 níveis:
-            - CRÍTICO (Emergency): FV, Flutter ventricular, TV sustentada, BAV de 3° grau com FC < 40 bpm, IAMCSST em qualquer território, Padrão de de Winter, Síndrome de Brugada tipo 1 espontâneo, QTc > 500 ms, Assistolia, Pausa sinusal > 3 segundos, Hipercalemia grave, Intoxicação digitálica com TV bidirecional.
-            - URGENTE (Urgent): FA com resposta ventricular rápida (> 150 bpm), IAMSSST, Padrão de Wellens, BRE novo, QTc 470–500 ms, TV não sustentada, BAV de 2° grau Mobitz II ou de alto grau, Bloqueio de ramo alternante, Pausa sinusal 2–3 segundos.
-            - ELETIVO (Routine): BAV de 1° grau, BRD completo isolado, BDAS / BDPI, ESA/EV frequentes ou multifocais, HVE/HVD, Síndrome de WPW (sem arritmia ativa), Repolarização precoce, Alterações inespecíficas do ST-T, QTc borderline (440–469 ms).
+              ETAPA 3: CATÁLOGO EXAUSTIVO DE ALTERAÇÕES A DETECTAR
+              3.1 ARRITMIAS SUPRAVENTRICULARES:
+              - Fibrilação Atrial (FA): ATENÇÃO MÁXIMA. Caracteriza-se por intervalos RR irregularmente irregulares (distâncias visivelmente diferentes entre os complexos QRS), AUSÊNCIA de ondas P distintas antes de cada QRS, e frequentemente presença de ondas fibrilatórias (ondas 'f' finas ou grosseiras) tremulando na linha de base. Se os QRS são estreitos e os intervalos entre eles variam aleatoriamente sem ondas P claras, o diagnóstico É FIBRILAÇÃO ATRIAL.
+              - Flutter Atrial: ondas F em dente de serra (240-300 bpm), condução AV fixa ou variável.
+              - Taquicardia Atrial Focal: onda P com morfologia diferente da sinusal, linha iselétrica entre as Ps.
+              - Taquicardia Atrial Multifocal (TAM): ≥ 3 morfologias de onda P distintas, ritmo irregular.
+              - TRNAV (Típica Slow-Fast / Atípica Fast-Slow): pseudo-R' em V1, pseudo-S em II, III, aVF.
+              - TRAV (WPW): onda delta, PR curto (<120ms), QRS alargado.
+              - Extrassístoles Atriais (ESA): precoces, com P de morfologia diferente, com ou sem aberrância.
+              - Ritmo Juncional: P ausente ou retrógrada, QRS estreito (escape 40-60 bpm, acelerado 60-100 bpm, taquicardia >100 bpm).
+              
+              3.2 ARRITMIAS VENTRICULARES:
+              - Extrassístoles Ventriculares (EVs): QRS largo e bizarro, pausa compensatória. Classificar como isoladas, pareadas, bigeminismo, trigeminismo, polimórficas.
+              - Taquicardia Ventricular (TV) Monomórfica: QRS largo, regular, dissociação AV, batimentos de fusão/captura.
+              - TV Polimórfica / Torsades de Pointes: QRS torcendo em torno da linha de base, associado a QT longo.
+              - Fibrilação Ventricular (FV): ATENÇÃO MÁXIMA. Caracteriza-se por ondas caóticas, contínuas e irregulares (ondulações grosseiras ou finas) variando em amplitude e morfologia, SEM linha de base iselétrica e SEM complexos QRS verdadeiros. Não confunda FV grosseira com TV. Se as ondas são largas, rápidas, mas com amplitudes e intervalos visivelmente irregulares e caóticos, o diagnóstico É FIBRILAÇÃO VENTRICULAR.
+              - Ritmo Idioventricular Acelerado (RIVA): QRS largo, regular, 40-100 bpm.
+              
+              3.3 BLOQUEIOS AV E CONDUÇÃO:
+              - BAV 1º Grau: PR > 200ms constante.
+              - BAV 2º Grau Mobitz I (Wenckebach): aumento progressivo do PR até bloqueio da P.
+              - BAV 2º Grau Mobitz II: PR constante com bloqueio súbito da P.
+              - BAV 3º Grau (Total): dissociação AV completa, PP e RR regulares, PP < RR.
+              - Bloqueio de Ramo Direito (BRD): QRS ≥ 120ms, rsR' em V1-V2, S alargada em I e V6.
+              - Bloqueio de Ramo Esquerdo (BRE): QRS ≥ 120ms, QS ou rS em V1, R largo e entalhado em I, aVL, V5-V6.
+              - Bloqueios Divisionais: BDAS (eixo esquerdo extremo, qR em I/aVL, rS em II/III/aVF), BDPI (eixo direito, qR em II/III/aVF, rS em I/aVL).
+              
+              3.4 SÍNDROMES CORONÁRIAS E ISQUEMIA (OMI Paradigm):
+              - IAMCSST: supradesnivelamento do ST no ponto J ≥ 1mm em ≥ 2 derivações contíguas (≥ 2mm em V2-V3 para homens ≥ 40 anos, ≥ 2.5mm < 40 anos, ≥ 1.5mm mulheres).
+              - Identificar Parede: Inferior (II, III, aVF), Anterior (V1-V4), Lateral (I, aVL, V5-V6), Posterior (infra ST V1-V3 com R proeminente), VD (V3R, V4R).
+              - Padrão de de Winter: infra ST ascendente com onda T alta e simétrica em precordiais.
+              - Padrão de Wellens: onda T bifásica (Tipo A) ou profundamente invertida (Tipo B) em V2-V3.
+              - Critérios de Sgarbossa (para BRE/Marca-passo): supra ST concordante ≥ 1mm, infra ST concordante ≥ 1mm em V1-V3, supra ST discordante > 25% da onda S.
+              - Isquemia/Lesão: infra ST horizontal ou descendente ≥ 0.5mm, inversão de onda T simétrica.
+              - Necrose: onda Q patológica (≥ 40ms ou > 25% da onda R).
+              
+              3.5 CHANNELOPATIAS E ALTERAÇÕES ESTRUTURAIS:
+              - Síndrome de Brugada: Tipo 1 (supra ST coved ≥ 2mm em V1-V2), Tipo 2 (saddle-back).
+              - Sobrecarga Ventricular Esquerda (HVE): Sokolow-Lyon (S em V1 + R em V5/V6 ≥ 35mm), Cornell (R em aVL + S em V3 > 28mm homens / 20mm mulheres). Padrão de strain.
+              - Sobrecarga Ventricular Direita (HVD): R > S em V1, eixo direito, S profunda em V5-V6.
+              - Sobrecarga Atrial: DAE (P mitrale > 120ms, índice de Morris em V1), DAD (P pulmonale > 2.5mm em II).
+              - TEP: S1Q3T3, inversão de T em V1-V4, taquicardia sinusal, BRD novo.
+              - Pericardite Aguda: supra ST côncavo difuso, infra de PR.
+              - Alterações Eletrolíticas: Hipercalemia (T apiculada, QRS largo, P ausente), Hipocalemia (onda U proeminente, infra ST).
+              - Marca-passo: identificar espículas (atrial, ventricular, biventricular) e avaliar captura/sensibilidade.
 
-            ETAPA 5: FORMATO DE SAÍDA DO RELATÓRIO
-            O interpretador deve gerar automaticamente um relatório estruturado em JSON conforme o schema fornecido (incluindo o objeto 'optimizedReport' que reflete a Etapa 9 do protocolo).
+              ETAPA 4: REGRAS DE PRIORIZAÇÃO (ALERT LAYER)
+              Implementar sistema de alertas em 3 níveis:
+              - CRÍTICO (Emergency): FV, Flutter ventricular, TV sustentada, BAV de 3° grau com FC < 40 bpm, IAMCSST em qualquer território, Padrão de de Winter, Síndrome de Brugada tipo 1 espontâneo, QTc > 500 ms, Assistolia, Pausa sinusal > 3 segundos, Hipercalemia grave, Intoxicação digitálica com TV bidirecional.
+              - URGENTE (Urgent): FA com resposta ventricular rápida (> 150 bpm), IAMSSST, Padrão de Wellens, BRE novo, QTc 470–500 ms, TV não sustentada, BAV de 2° grau Mobitz II ou de alto grau, Bloqueio de ramo alternante, Pausa sinusal 2–3 segundos.
+              - ELETIVO (Routine): BAV de 1° grau, BRD completo isolado, BDAS / BDPI, ESA/EV frequentes ou multifocais, HVE/HVD, Síndrome de WPW (sem arritmia ativa), Repolarização precoce, Alterações inespecíficas do ST-T, QTc borderline (440–469 ms).
 
-            --- INSTRUÇÕES DE EXECUÇÃO ---
-            1. Analise a imagem com precisão milimétrica.
-            2. Preencha o JSON estritamente de acordo com o schema fornecido.
-            3. Em 'precisionMeasurements.ischemiaAnalysis', detalhe a parede afetada e artéria culpada se houver isquemia.
-            4. Defina a 'urgency' estritamente como "Emergency", "Urgent" ou "Routine" com base na Etapa 4 (Crítico = Emergency, Urgente = Urgent, Eletivo = Routine).
-            5. Forneça o 'clinicalReasoning' explicando os achados que levaram ao diagnóstico.
-            6. Preencha detalhadamente o 'optimizedReport' com todas as medições e diagnósticos.
-            7. Retorne APENAS o JSON válido.
-            `
+              ETAPA 5: FORMATO DE SAÍDA DO RELATÓRIO
+              O interpretador deve gerar automaticamente um relatório estruturado em JSON conforme o schema fornecido (incluindo o objeto 'optimizedReport' que reflete a Etapa 9 do protocolo).
+
+              --- INSTRUÇÕES DE EXECUÇÃO ---
+              1. Analise a imagem com precisão milimétrica.
+              2. Preencha o JSON estritamente de acordo com o schema fornecido.
+              3. Em 'precisionMeasurements.ischemiaAnalysis', detalhe a parede afetada e artéria culpada se houver isquemia.
+              4. Defina a 'urgency' estritamente como "Emergency", "Urgent" ou "Routine" com base na Etapa 4 (Crítico = Emergency, Urgente = Urgent, Eletivo = Routine).
+              5. Forneça o 'clinicalReasoning' explicando os achados que levaram ao diagnóstico.
+              6. Preencha detalhadamente o 'optimizedReport' com todas as medições e diagnósticos.
+              7. REGRA CRÍTICA (FV): Se a imagem mostrar ondulações largas, rápidas e caóticas (variando em tamanho e forma, sem linha de base plana), classifique IMEDIATAMENTE como Fibrilação Ventricular (FV). Não classifique como Taquicardia Ventricular (TV) a menos que as ondas sejam perfeitamente regulares e uniformes.
+              8. REGRA CRÍTICA (FA): Se a imagem mostrar intervalos RR visivelmente irregulares (distâncias diferentes entre os picos R) E ausência de ondas P claras antes de cada QRS, classifique IMEDIATAMENTE como Fibrilação Atrial (FA). Não confunda as ondas fibrilatórias ('f') na linha de base com ruído ou artefato.
+              9. Retorne APENAS o JSON válido.
+              `
+            }
+          ]
+        },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: ANALYSIS_SCHEMA,
+        }
+      });
+
+      const rawResult = JSON.parse(response.text || '{}');
+      const processTime = Date.now() - startTime;
+
+      // Inject Telemetry for the UI Neural HUD
+      if (rawResult.precisionMeasurements) {
+          if (!rawResult.precisionMeasurements.neuralTelemetry) {
+              rawResult.precisionMeasurements.neuralTelemetry = {};
           }
-        ]
-      },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: ANALYSIS_SCHEMA,
+          rawResult.precisionMeasurements.neuralTelemetry.processingTimeMs = processTime;
+          rawResult.precisionMeasurements.neuralTelemetry.modelArchitecture = "CardioAI Nexus v10.0 [Universal Medical Compendium]";
+          
+          // Ensure Neural Telemetry has data structure if model missed it
+          if (!rawResult.precisionMeasurements.neuralTelemetry.featureExtraction) {
+               rawResult.precisionMeasurements.neuralTelemetry.featureExtraction = {
+                   morphologicalFeatures: ["Global Morphology Scan", "Advanced Criteria Validation"],
+                   rhythmFeatures: ["Beat-to-Beat Interval Analysis", "P-wave Morphology Tracking"]
+               };
+          }
+
+          if (!rawResult.precisionMeasurements.neuralTelemetry.differentialDiagnoses) {
+              rawResult.precisionMeasurements.neuralTelemetry.differentialDiagnoses = [
+                  {
+                      diagnosis: rawResult.diagnosis || "Unspecified Arrhythmia",
+                      probability: 99,
+                      reasoning: rawResult.clinicalReasoning || "Primary diagnosis based on dominant features."
+                  }
+              ];
+          }
       }
-    });
-
-    const rawResult = JSON.parse(response.text || '{}');
-    const processTime = Date.now() - startTime;
-
-    // Inject Telemetry for the UI Neural HUD
-    if (rawResult.precisionMeasurements) {
-        if (!rawResult.precisionMeasurements.neuralTelemetry) {
-            rawResult.precisionMeasurements.neuralTelemetry = {};
-        }
-        rawResult.precisionMeasurements.neuralTelemetry.processingTimeMs = processTime;
-        rawResult.precisionMeasurements.neuralTelemetry.modelArchitecture = "CardioAI Nexus v10.0 [Universal Medical Compendium]";
-        
-        // Ensure Neural Telemetry has data structure if model missed it
-        if (!rawResult.precisionMeasurements.neuralTelemetry.featureExtraction) {
-             rawResult.precisionMeasurements.neuralTelemetry.featureExtraction = {
-                 morphologicalFeatures: ["Global Morphology Scan", "Advanced Criteria Validation"],
-                 rhythmFeatures: ["Beat-to-Beat Interval Analysis", "P-wave Morphology Tracking"]
+      
+      // Legacy Data Mapping for Backward Compatibility
+      if (rawResult.precisionMeasurements?.waves) {
+         const w = rawResult.precisionMeasurements.waves;
+         if (w.intervals) {
+             rawResult.precisionMeasurements.prIntervalMs = w.intervals.prMs;
+         }
+         if (w.qrsComplex) {
+             rawResult.precisionMeasurements.qrsComplex = {
+                durationMs: w.qrsComplex.durationMs,
+                amplitudeMv: w.qrsComplex.amplitudeMv,
+                morphology: `V1:${w.qrsComplex.morphologyV1} / V6:${w.qrsComplex.morphologyV6}`
              };
+         }
+         rawResult.precisionMeasurements.pWave = w.pWave;
+      }
+
+      // Apply Deterministic Logic "Guardrails"
+      const enriched = enrichAnalysisWithLogic(rawResult, patientCtx);
+      saveRecord(enriched);
+      return enriched;
+
+    } catch (error: any) {
+      console.error(`Pipeline Failure (Attempt ${attempt + 1}/${maxRetries}):`, error);
+      lastError = error;
+      
+      // Check if it's a rate limit error (429)
+      if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('RESOURCE_EXHAUSTED') || error?.message?.includes('quota')) {
+        attempt++;
+        if (attempt < maxRetries) {
+          // Exponential backoff: 2s, 4s, 8s
+          const delay = Math.pow(2, attempt) * 1000;
+          console.log(`Rate limited. Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
         }
+      } else {
+        // If it's not a rate limit error, don't retry
+        break;
+      }
     }
-    
-    // Legacy Data Mapping for Backward Compatibility
-    if (rawResult.precisionMeasurements?.waves) {
-       const w = rawResult.precisionMeasurements.waves;
-       if (w.intervals) {
-           rawResult.precisionMeasurements.prIntervalMs = w.intervals.prMs;
-       }
-       if (w.qrsComplex) {
-           rawResult.precisionMeasurements.qrsComplex = {
-              durationMs: w.qrsComplex.durationMs,
-              amplitudeMv: w.qrsComplex.amplitudeMv,
-              morphology: `V1:${w.qrsComplex.morphologyV1} / V6:${w.qrsComplex.morphologyV6}`
-           };
-       }
-       rawResult.precisionMeasurements.pWave = w.pWave;
-    }
-
-    // Apply Deterministic Logic "Guardrails"
-    const enriched = enrichAnalysisWithLogic(rawResult, patientCtx);
-    saveRecord(enriched);
-    return enriched;
-
-  } catch (error: any) {
-    console.error("Pipeline Failure:", error);
-    // Return the actual error message to help debugging
-    throw new AnalysisError(
-      "AI_CORE_FAILURE", 
-      "Falha na Análise.", 
-      `Erro técnico: ${error.message || JSON.stringify(error)}. Tente novamente.`
-    );
   }
+
+  // If we exhausted retries or hit a non-retryable error
+  throw new AnalysisError(
+    "AI_CORE_FAILURE", 
+    "Falha na Análise.", 
+    `Erro técnico: ${lastError?.message || JSON.stringify(lastError)}. Tente novamente mais tarde.`
+  );
 };
 
 export const explainConceptWithAudio = async (concept: string): Promise<Uint8Array> => {

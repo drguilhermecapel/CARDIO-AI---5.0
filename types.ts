@@ -199,10 +199,19 @@ export interface EcgAnalysisResult {
   optimizedReport?: OptimizedReport;
 }
 
+export interface AdjudicationData {
+  status: 'pending' | 'approved' | 'rejected' | 'modified';
+  user: string;
+  timestamp: number;
+  modifiedDiagnosis?: string;
+  notes?: string;
+}
+
 export interface EcgRecord extends EcgAnalysisResult {
   id: string;
   timestamp: number;
   synced: boolean;
+  adjudication?: AdjudicationData;
 }
 
 export enum AnalysisStatus {

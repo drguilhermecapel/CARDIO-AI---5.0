@@ -253,6 +253,34 @@ const MedicalReport = React.forwardRef<HTMLDivElement, MedicalReportProps>(({ re
          </div>
       </div>
 
+      {/* NEURAL NETWORK TELEMETRY */}
+      {m.neuralTelemetry && (
+        <div className="mb-6 p-4 border border-cyan-200 bg-cyan-50 rounded">
+           <h3 className="text-[10px] font-bold uppercase text-cyan-800 mb-2 border-b border-cyan-300 pb-1">Neural Network Telemetry</h3>
+           <div className="grid grid-cols-2 gap-4 text-[10px] mb-3">
+              <div>
+                 <span className="font-bold text-cyan-900">Model Architecture:</span> {m.neuralTelemetry.modelArchitecture}
+              </div>
+              <div>
+                 <span className="font-bold text-cyan-900">Processing Time:</span> {m.neuralTelemetry.processingTimeMs} ms
+              </div>
+           </div>
+           
+           <h4 className="text-[9px] font-bold uppercase text-cyan-700 mb-1">Differential Diagnoses & Reasoning</h4>
+           <div className="space-y-2">
+              {m.neuralTelemetry.differentialDiagnoses?.map((diag, idx) => (
+                 <div key={idx} className="bg-white border border-cyan-100 p-2 rounded">
+                    <div className="flex justify-between font-bold text-cyan-900 mb-1">
+                       <span>{diag.diagnosis}</span>
+                       <span>{diag.probability}% Confidence</span>
+                    </div>
+                    <p className="text-[9px] text-cyan-800 italic">"{diag.reasoning}"</p>
+                 </div>
+              ))}
+           </div>
+        </div>
+      )}
+
       {/* FOOTER */}
       <div className="mt-auto pt-4 border-t-2 border-black">
          <div className="flex justify-between items-end">

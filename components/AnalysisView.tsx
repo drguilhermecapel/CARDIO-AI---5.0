@@ -283,11 +283,21 @@ const ReasoningPathway: React.FC<{ reasoning: string }> = ({ reasoning }) => (
 
 // --- COMPONENTE PRINCIPAL ---
 
+import { updateAdjudication, saveRecord } from '../services/database';
+
+// ... (existing imports)
+
 const AnalysisView: React.FC<AnalysisViewProps> = ({ result, imagePreview, onReset, patientContext }) => {
   const [isVideoLoading, setIsVideoLoading] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const reportRef = useRef<HTMLDivElement>(null);
   
+  // Adjudication State
+  const [adjudicationStatus, setAdjudicationStatus] = useState<'pending' | 'approved' | 'rejected' | 'modified'>('pending');
+  const [isModifying, setIsModifying] = useState(false);
+  const [modificationText, setModificationText] = useState(result.diagnosis);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const m = result.precisionMeasurements;
   
   const handleAnimate = async () => {
@@ -323,6 +333,35 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ result, imagePreview, onRes
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
     html2pdf().set(opt).from(element).save();
+  };
+
+  const handleAdjudication = async (status: 'approved' | 'rejected' | 'modified', text?: string) => {
+    setIsSubmitting(true);
+    try {
+      // Ensure record exists or save it if it's new
+      let recordId = result.id;
+      if (!recordId) {
+         const saved = saveRecord(result);
+         recordId = saved.id;
+      }
+
+      const adjudicationData = {
+        status,
+        user: 'Cardiologist',
+        timestamp: Date.now(),
+        modifiedDiagnosis: status === 'modified' ? (text || modificationText) : undefined,
+        notes: status === 'rejected' ? 'Flagged as artifact/non-diagnostic' : undefined
+      };
+
+      updateAdjudication(recordId!, adjudicationData);
+      setAdjudicationStatus(status);
+      setIsModifying(false);
+    } catch (error) {
+      console.error("Adjudication failed:", error);
+      alert("Failed to save adjudication.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Safe accessors for nested wave data
@@ -454,52 +493,120 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ result, imagePreview, onRes
           <div>
             <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Clinical Decision</h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <button 
-                onClick={() => alert('Approved: Added to validated dataset for continuous learning.')}
-                className="flex flex-col items-center justify-center gap-3 p-6 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/50 rounded-2xl transition-all group"
-              >
-                <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <svg className="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
+            {isModifying ? (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-6 animate-fade-in">
+                <h4 className="text-amber-400 font-bold mb-2">Modify Diagnosis</h4>
+                <textarea 
+                  value={modificationText}
+                  onChange={(e) => setModificationText(e.target.value)}
+                  className="w-full bg-black/40 border border-amber-500/30 rounded-xl p-4 text-white text-sm mb-4 focus:outline-none focus:border-amber-500"
+                  rows={3}
+                />
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => handleAdjudication('modified')}
+                    disabled={isSubmitting}
+                    className="px-4 py-2 bg-amber-500 text-black font-bold rounded-lg text-xs uppercase tracking-widest hover:bg-amber-400 transition-colors"
+                  >
+                    {isSubmitting ? 'Saving...' : 'Confirm Modification'}
+                  </button>
+                  <button 
+                    onClick={() => setIsModifying(false)}
+                    className="px-4 py-2 bg-white/10 text-white font-bold rounded-lg text-xs uppercase tracking-widest hover:bg-white/20 transition-colors"
+                  >
+                    Cancel
+                  </button>
                 </div>
-                <div className="text-center">
-                  <div className="font-bold text-emerald-400">Approve AI Findings</div>
-                  <div className="text-[10px] text-slate-400 mt-1">Add to validated dataset</div>
-                </div>
-              </button>
+              </div>
+            ) : adjudicationStatus === 'pending' ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button 
+                  onClick={() => handleAdjudication('approved')}
+                  disabled={isSubmitting}
+                  className="flex flex-col items-center justify-center gap-3 p-6 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500/50 rounded-2xl transition-all group"
+                >
+                  <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <svg className="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-bold text-emerald-400">Approve AI Findings</div>
+                    <div className="text-[10px] text-slate-400 mt-1">Add to validated dataset</div>
+                  </div>
+                </button>
 
-              <button 
-                onClick={() => alert('Modify: Open interface to correct false positives/negatives.')}
-                className="flex flex-col items-center justify-center gap-3 p-6 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/50 rounded-2xl transition-all group"
-              >
-                <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <svg className="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                  </svg>
-                </div>
-                <div className="text-center">
-                  <div className="font-bold text-amber-400">Modify Diagnosis</div>
-                  <div className="text-[10px] text-slate-400 mt-1">Correct false positives/negatives</div>
-                </div>
-              </button>
+                <button 
+                  onClick={() => setIsModifying(true)}
+                  disabled={isSubmitting}
+                  className="flex flex-col items-center justify-center gap-3 p-6 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 hover:border-amber-500/50 rounded-2xl transition-all group"
+                >
+                  <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <svg className="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-bold text-amber-400">Modify Diagnosis</div>
+                    <div className="text-[10px] text-slate-400 mt-1">Correct false positives/negatives</div>
+                  </div>
+                </button>
 
-              <button 
-                onClick={() => alert('Rejected: Flagged as artifact or non-diagnostic.')}
-                className="flex flex-col items-center justify-center gap-3 p-6 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 hover:border-rose-500/50 rounded-2xl transition-all group"
-              >
-                <div className="w-12 h-12 rounded-full bg-rose-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <svg className="w-6 h-6 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                <button 
+                  onClick={() => handleAdjudication('rejected')}
+                  disabled={isSubmitting}
+                  className="flex flex-col items-center justify-center gap-3 p-6 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 hover:border-rose-500/50 rounded-2xl transition-all group"
+                >
+                  <div className="w-12 h-12 rounded-full bg-rose-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <svg className="w-6 h-6 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-bold text-rose-400">Reject / Artifact</div>
+                    <div className="text-[10px] text-slate-400 mt-1">Flag as non-diagnostic</div>
+                  </div>
+                </button>
+              </div>
+            ) : (
+              <div className={`p-6 rounded-2xl border flex items-center justify-between ${
+                adjudicationStatus === 'approved' ? 'bg-emerald-500/10 border-emerald-500/30' :
+                adjudicationStatus === 'modified' ? 'bg-amber-500/10 border-amber-500/30' :
+                'bg-rose-500/10 border-rose-500/30'
+              }`}>
+                <div className="flex items-center gap-4">
+                  {adjudicationStatus === 'approved' && (
+                     <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                        <svg className="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                     </div>
+                  )}
+                  {adjudicationStatus === 'modified' && (
+                     <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                        <svg className="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                     </div>
+                  )}
+                  {adjudicationStatus === 'rejected' && (
+                     <div className="w-10 h-10 rounded-full bg-rose-500/20 flex items-center justify-center">
+                        <svg className="w-6 h-6 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                     </div>
+                  )}
+                  <div>
+                    <div className="font-bold text-white text-lg">
+                      {adjudicationStatus === 'approved' && 'Findings Approved'}
+                      {adjudicationStatus === 'modified' && 'Diagnosis Modified'}
+                      {adjudicationStatus === 'rejected' && 'Rejected / Flagged'}
+                    </div>
+                    <div className="text-xs text-slate-400">Logged to continuous learning pipeline.</div>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <div className="font-bold text-rose-400">Reject / Artifact</div>
-                  <div className="text-[10px] text-slate-400 mt-1">Flag as non-diagnostic</div>
-                </div>
-              </button>
-            </div>
+                <button 
+                  onClick={() => setAdjudicationStatus('pending')}
+                  className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold uppercase tracking-widest rounded-lg transition-colors"
+                >
+                  Undo
+                </button>
+              </div>
+            )}
           </div>
           
           {/* Audit Log */}

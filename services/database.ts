@@ -30,6 +30,28 @@ export const saveRecord = (analysis: EcgAnalysisResult): EcgRecord => {
   }
 };
 
+export const updateAdjudication = (id: string, adjudication: any): void => {
+  try {
+    const existingData = localStorage.getItem(STORAGE_KEY);
+    if (!existingData) return;
+    
+    const history: any[] = JSON.parse(existingData);
+    const index = history.findIndex(r => r.id === id);
+    
+    if (index !== -1) {
+      history[index].adjudication = adjudication;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+    } else {
+      // If record not found (maybe not saved yet?), we can't update it easily without the full object.
+      // Ideally the app should save on analysis completion.
+      console.warn(`Record with ID ${id} not found for adjudication update.`);
+    }
+  } catch (error) {
+    console.error("Database Error (Update):", error);
+    throw new Error("Failed to update clinical record.");
+  }
+};
+
 export const getHistory = (): EcgRecord[] => {
   try {
     const data = localStorage.getItem(STORAGE_KEY);
